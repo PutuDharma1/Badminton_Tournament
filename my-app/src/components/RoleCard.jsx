@@ -1,12 +1,33 @@
-// src/components/RoleCard.jsx
-import { Link } from "react-router-dom";
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-export default function RoleCard({ title, desc, to }) {
+const RoleCard = ({ role }) => {
+  const navigate = useNavigate();
+
+  const getPath = () => {
+    switch (role.toLowerCase()) {
+      case 'organizer':
+        return '/register-organizer';
+      case 'referee':
+        return '/register-referee';
+      case 'player':
+        return '/register-player';
+      default:
+        return '/';
+    }
+  };
+
+  const handleClick = () => {
+    navigate(getPath());
+  };
+
   return (
-    <Link to={to} className="role-card">
-      <h3>{title}</h3>
-      <p>{desc}</p>
-      <span className="arrow">→</span>
-    </Link>
+    // Pastikan Anda menambahkan className="role-card" di sini
+    <div className="role-card" onClick={handleClick}>
+      <h3>{role}</h3>
+      <p>Daftar sebagai {role}</p>
+    </div>
   );
-}
+};
+
+export default RoleCard;

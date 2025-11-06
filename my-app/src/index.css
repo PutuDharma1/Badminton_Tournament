@@ -1,11 +1,19 @@
+/* my-app/src/index.css */
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Palet Warna Dasar */
+  --primary-color: #007bff; /* Biru cerah untuk tombol dan link */
+  --background-color: #f0f2f5; /* Abu-abu sangat muda untuk latar belakang */
+  --card-background: #ffffff;  /* Putih untuk kontainer */
+  --text-color: #333333;      /* Hitam/abu tua untuk teks */
+  --border-color: #dee2e6;   /* Abu-abu muda untuk border */
+  --success-color: #28a745;   /* Hijau untuk sukses */
+
+  /* Pengaturan Font */
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: light; /* Kita set ke mode terang saja agar konsisten */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,56 +21,31 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
+/* * 1. Atur Body untuk Centering
+ * Menggunakan flexbox untuk memposisikan semua konten di tengah viewport.
+ */
 body {
   margin: 0;
   display: flex;
-  place-items: center;
+  justify-content: center;  /* Center horizontal */
+  align-items: center;    /* Center vertikal */
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--background-color); /* Terapkan warna latar belakang */
+  color: var(--text-color);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* * 2. Atur Root
+ * Pastikan #root mengambil lebar penuh dan mengatur kontennya
+ * (Navbar dan .container) dalam satu kolom.
+ */
+#root {
+  width: 100%;
+  max-width: 1280px; /* Lebar maksimum aplikasi Anda */
+  margin: 0 auto;
+  padding: 0 2rem; /* Beri jarak aman di layar kecil */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Pastikan semua anak (Navbar, .container) terpusat */
+  box-sizing: border-box;
 }
