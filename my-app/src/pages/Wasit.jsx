@@ -1,4 +1,3 @@
-// src/pages/Wasit.jsx
 import React, { useState } from 'react';
 import { useGlobalContext } from '../context/GlobalContext';
 import RefereeMatchPicker from '../components/RefereeMatchPicker';

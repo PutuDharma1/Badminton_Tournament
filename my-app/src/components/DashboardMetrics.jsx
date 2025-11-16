@@ -1,7 +1,5 @@
-// src/components/DashboardMetrics.jsx
 import React from 'react';
 
-// Terima 'metrics' sebagai prop
 function DashboardMetrics({ metrics }) {
   const { participantsCount, categoriesCount, matchesCount } = metrics;
 
@@ -23,5 +21,4 @@ function DashboardMetrics({ metrics }) {
   );
 }
 
-// Pastikan ada default export
 export default DashboardMetrics;

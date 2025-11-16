@@ -1,4 +1,3 @@
-// src/components/RefereeMatchPicker.jsx
 import React from 'react';
 
 function RefereeMatchPicker({ matches, onSelectMatch, selectedMatchId }) {

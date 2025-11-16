@@ -1,4 +1,3 @@
-// src/pages/Peserta.jsx
 import React from 'react';
 import ParticipantRegister from '../components/ParticipantRegister';
 import ParticipantTable from '../components/ParticipantTable';

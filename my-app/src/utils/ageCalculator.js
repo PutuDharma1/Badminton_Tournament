@@ -1,4 +1,3 @@
-// src/utils/ageCalculator.js
 export function calculateCategory(dobString) {
   if (!dobString) return 'Dewasa';
   

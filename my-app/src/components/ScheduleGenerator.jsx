@@ -1,4 +1,3 @@
-// src/components/ScheduleGenerator.jsx
 import React from 'react';
 import { useGlobalContext } from '../context/GlobalContext';
 

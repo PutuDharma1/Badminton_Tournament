@@ -1,4 +1,3 @@
-// src/components/ScoreInput.jsx
 import React, { useState } from 'react';
 import { useGlobalContext } from '../context/GlobalContext';
 

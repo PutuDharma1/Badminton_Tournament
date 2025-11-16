@@ -6,7 +6,7 @@ export function generateRoundRobin(participants, category) {
   for (let i = 0; i < participants.length; i++) {
     for (let j = i + 1; j < participants.length; j++) {
       matches.push({
-        id: `m-${category}-${Date.now()}-${i}-${j}`,
+        id: `m-${category.substring(0, 3)}-${i}-${j}`, // Kode lebih pendek
         playerA: participants[i],
         playerB: participants[j],
         category: category,

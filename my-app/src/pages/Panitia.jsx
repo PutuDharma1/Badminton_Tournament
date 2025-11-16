@@ -1,4 +1,3 @@
-// src/pages/Panitia.jsx
 import React from 'react';
 import AdminPanel from '../components/AdminPanel';
 

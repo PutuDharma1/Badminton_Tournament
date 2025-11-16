@@ -35,7 +35,7 @@ function MatchTable({ title, matches }) {
             ) : (
               matches.map((match) => (
                 <tr key={match.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{match.id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">{match.id.split('-')[1]}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{match.category}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                     {match.playerA.name} vs {match.playerB.name}
@@ -45,7 +45,9 @@ function MatchTable({ title, matches }) {
                     {match.status === 'Selesai' ? (
                       <span className="font-bold text-green-600">{match.winner}</span>
                     ) : (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        match.status === 'Sedang Berlangsung' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
                         {match.status}
                       </span>
                     )}
@@ -60,4 +62,4 @@ function MatchTable({ title, matches }) {
   );
 }
 
-export default MatchTable;
+export default MatchTable; // Pastikan ada ini!

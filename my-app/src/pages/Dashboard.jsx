@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import React from 'react';
 import { useGlobalContext } from '../context/GlobalContext';
 import DashboardMetrics from '../components/DashboardMetrics';

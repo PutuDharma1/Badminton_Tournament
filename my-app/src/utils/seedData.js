@@ -1,5 +1,3 @@
-// src/utils/seedData.js
-
 export const DEFAULT_TOURNAMENT = {
   name: "Turnamen Bulutangkis React 2025",
   date: "2025-11-10",
@@ -7,12 +5,12 @@ export const DEFAULT_TOURNAMENT = {
 };
 
 // Data Peserta Demo
-const p1 = { id: 'p1', name: 'Budi Santoso', dob: '2010-01-15', email: 'budi@mail.com', category: 'U15' };
-const p2 = { id: 'p2', name: 'Citra Lestari', dob: '2009-05-20', email: 'citra@mail.com', category: 'U17' };
-const p3 = { id: 'p3', name: 'Agus Wijaya', dob: '2010-03-10', email: 'agus@mail.com', category: 'U15' };
-const p4 = { id: 'p4', name: 'Dewi Anggraini', dob: '2008-11-01', email: 'dewi@mail.com', category: 'U17' };
-const p5 = { id: 'p5', name: 'Eko Prasetio', dob: '1990-07-07', email: 'eko@mail.com', category: 'Dewasa' };
-const p6 = { id: 'p6', name: 'Fitri Handayani', dob: '1992-12-30', email: 'fitri@mail.com', category: 'Dewasa' };
+const p1 = { id: 'p1', name: 'I Putu Dharma Puspa', dob: '2010-01-15', email: 'putput@gmail.com', category: 'U15' };
+const p2 = { id: 'p2', name: 'Axel Darren S.', dob: '2009-05-20', email: 'Axel@gmail.com', category: 'U17' };
+const p3 = { id: 'p3', name: 'M. Noor Abdi A.S.', dob: '2010-03-10', email: 'GrandTismo@gmail.com', category: 'U15' };
+const p4 = { id: 'p4', name: 'Joko Widodo', dob: '2008-11-01', email: 'OWI@gmail.com', category: 'U17' };
+const p5 = { id: 'p5', name: 'Prabowo Subianto', dob: '1990-07-07', email: 'OWO@gmail.com', category: 'Dewasa' };
+const p6 = { id: 'p6', name: 'King Pur', dob: '1992-12-30', email: 'PUR@gmail.com', category: 'Dewasa' };
 
 export const SEED_DATA = {
   tournament: DEFAULT_TOURNAMENT,

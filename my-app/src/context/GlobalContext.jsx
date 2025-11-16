@@ -1,17 +1,13 @@
-// src/context/GlobalContext.jsx
 import React, { createContext, useContext, useReducer } from 'react';
 import { SEED_DATA, DEFAULT_TOURNAMENT } from '../utils/seedData';
 import { calculateCategory } from '../utils/ageCalculator';
-import { generateRoundRobin } from '../utils/roundRobin'; // <-- Perbaikan di sini
-
-// State awal
+import { generateRoundRobin } from '../utils/roundRobin'; 
 const initialState = {
   tournament: DEFAULT_TOURNAMENT,
   participants: [],
   matches: [],
 };
 
-// Reducer untuk mengelola semua aksi
 function appReducer(state, action) {
   switch (action.type) {
     case 'ADD_PARTICIPANT': {
@@ -70,7 +66,6 @@ function appReducer(state, action) {
 
 // Helper untuk menentukan pemenang & status
 function determineWinner(match, scores) {
-  // Pastikan skor adalah angka
   const [s1a, s1b, s2a, s2b, s3a, s3b] = scores.map(s => parseInt(s) || 0);
   let winsA = 0;
   let winsB = 0;
