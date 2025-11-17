@@ -1,39 +1,65 @@
-import React from 'react';
-import { useGlobalContext } from '../context/GlobalContext';
+// my-app/src/components/ParticipantTable.jsx
+import React, { useState, useEffect } from 'react';
 
 function ParticipantTable() {
-  const { participants } = useGlobalContext();
+  const [participants, setParticipants] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchParticipants = async () => {
+      try {
+        // Ganti '1' dengan ID turnamen dinamis jika perlu
+        const response = await fetch('http://127.0.0.1:5000/participant/list/1'); 
+        const data = await response.json();
+        setParticipants(data.data || []);
+      } catch (error) {
+        console.error("Gagal mengambil peserta:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchParticipants();
+  }, []); // TODO: Tambahkan dependency untuk refresh data
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h3 className="text-xl font-semibold mb-4">Peserta Terdaftar</h3>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tgl Lahir</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {participants.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="px-6 py-4 text-center text-gray-500">Belum ada peserta.</td>
-              </tr>
-            ) : (
-              participants.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.dob}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.category}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.email}</td>
+    <div className="card bg-base-100 shadow-xl">
+      <div className="card-body">
+        <h3 className="card-title">Daftar Peserta Terdaftar</h3>
+        
+        {isLoading ? (
+          <div className="flex justify-center p-10">
+            <span className="loading loading-lg loading-spinner"></span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table table-zebra w-full">
+              <thead>
+                <tr>
+                  <th>Nama</th>
+                  <th>Email</th>
+                  <th>Kategori</th>
+                  <th>Usia (saat turnamen)</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {participants.length > 0 ? (
+                  participants.map(p => (
+                    <tr key={p.id}>
+                      <td>{p.fullName}</td>
+                      <td>{p.email || '-'}</td>
+                      <td>{p.category ? p.category.name : 'Belum ada'}</td>
+                      <td>{p.age || '?'} thn</td> 
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="text-center">Belum ada peserta terdaftar.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

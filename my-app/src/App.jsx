@@ -30,29 +30,39 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <header className="mb-6">
-        <h1 className="text-4xl font-bold text-center text-blue-800">
-          Badminton Tournament Management
-        </h1>
-        <nav className="flex justify-center gap-4 mt-4 bg-white p-2 rounded-lg shadow-md">
-          {Object.values(TABS).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 font-semibold rounded-md transition-all ${
-                activeTab === tab
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </nav>
-      </header>
+    // Gunakan warna tema daisyUI untuk latar belakang
+    <div className="min-h-screen bg-base-200">
+      {/* === NAVBAR BARU MENGGUNAKAN daisyUI === */}
+      <div className="navbar bg-base-100 shadow-lg">
+        <div className="navbar-start">
+          <a className="btn btn-ghost text-xl text-blue-800 font-bold">
+            🏸 TournaMan
+          </a>
+        </div>
+        <div className="navbar-center hidden lg:flex">
+          <ul className="menu menu-horizontal px-1">
+            {Object.values(TABS).map((tab) => (
+              <li key={tab}>
+                <a
+                  onClick={() => setActiveTab(tab)}
+                  // Ganti logika 'className' dengan 'active'
+                  className={activeTab === tab ? 'active' : ''}
+                >
+                  {tab}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="navbar-end">
+          {/* Anda bisa tambahkan tombol Login/Logout di sini */}
+          <a className="btn btn-primary">Login</a>
+        </div>
+      </div>
+      {/* === AKHIR NAVBAR === */}
 
-      <main>
+      {/* Beri padding pada konten utama */}
+      <main className="p-4 md:p-8 max-w-7xl mx-auto">
         {renderTabContent()}
       </main>
     </div>

@@ -1,102 +1,95 @@
-import React, { useState } from 'react';
+// my-app/src/components/AdminPanel.jsx
+import React from 'react';
 import { useGlobalContext } from '../context/GlobalContext';
 
+// Komponen ini akan berisi logika untuk:
+// 1. Melihat semua kategori dan jumlah peserta
+// 2. Mengedit/Merge/Split kategori
+// 3. Memicu Generate Jadwal (Round Robin / Knockout)
+// 4. Mengunduh laporan
+
 function AdminPanel() {
-  const { tournament, updateSettings, seedData, resetData } = useGlobalContext();
-  const [settings, setSettings] = useState({
-    name: tournament.name || 'Turnamen Baru',
-    date: tournament.date || new Date().toISOString().split('T')[0],
-    bracketSize: tournament.bracketSize || 32,
-  });
+  // Anda akan uncomment ini saat context Anda siap
+  // const { categories, participants, generateSchedule, downloadReport } = useGlobalContext();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setSettings(prev => ({ ...prev, [name]: value }));
-  };
+  // Placeholder data, ganti dengan data dari context
+  const categories = [
+    {id: 1, name: 'Tunggal Putra U-15'},
+    {id: 2, name: 'Ganda Putra Dewasa'},
+    {id: 3, name: 'Tunggal Putri Dewasa'},
+  ];
+  const participants = [
+    {id: 1, categoryId: 1},
+    {id: 2, categoryId: 1},
+    {id: 3, categoryId: 2},
+    {id: 4, categoryId: 3},
+  ];
 
-  const handleUpdateSettings = () => {
-    updateSettings(settings);
-    alert("Pengaturan turnamen berhasil disimpan.");
-  };
+  const categorySummary = categories.map(cat => ({
+    ...cat,
+    participantCount: participants.filter(p => p.categoryId === cat.id).length
+  }));
 
-  const handleSeed = () => {
-    if (confirm("Yakin ingin memuat data demo? Semua data saat ini akan hilang.")) {
-      seedData();
-      alert("Data demo berhasil dimuat.");
-    }
-  };
-
-  const handleReset = () => {
-    if (confirm("YAKIN ingin me-reset semua data? (Peserta, Jadwal, Skor)")) {
-      resetData();
-      alert("Semua data telah di-reset.");
-    }
+  const handleGenerateSchedule = (categoryId) => {
+    // Panggil fungsi context
+    console.log(`Memicu generate jadwal untuk kategori: ${categoryId}`);
+    // generateSchedule(categoryId);
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
-      {/* Pengaturan Turnamen */}
-      <div className="space-y-4">
-        <h3 className="text-xl font-semibold">Pengaturan Turnamen</h3>
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nama Turnamen</label>
-          <input
-            type="text"
-            name="name"
-            id="name"
-            value={settings.name}
-            onChange={handleChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-          />
+    <div className="card bg-base-100 shadow-xl">
+      <div className="card-body space-y-6">
+        <h3 className="card-title">Manajemen Kategori & Jadwal</h3>
+        
+        {/* Tabel Ringkasan Kategori */}
+        <div className="overflow-x-auto">
+          <table className="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Peserta</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categorySummary.map((cat) => (
+                <tr key={cat.id}>
+                  <td>{cat.name}</td>
+                  <td>{cat.participantCount}</td>
+                  <td className="space-x-2">
+                    <button 
+                      onClick={() => handleGenerateSchedule(cat.id)}
+                      className="btn btn-primary btn-sm"
+                    >
+                      Generate Jadwal
+                    </button>
+                    <button className="btn btn-ghost btn-sm">Edit</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div>
-          <label htmlFor="date" className="block text-sm font-medium text-gray-700">Tanggal</label>
-          <input
-            type="date"
-            name="date"
-            id="date"
-            value={settings.date}
-            onChange={handleChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-          />
-        </div>
-        <div>
-          <label htmlFor="bracketSize" className="block text-sm font-medium text-gray-700">Jenis Bracket</label>
-          <select
-            name="bracketSize"
-            id="bracketSize"
-            value={settings.bracketSize}
-            onChange={handleChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-          >
-            <option value="16">16 Besar</option>
-            <option value="32">32 Besar</option>
-            <option value="64">64 Besar</option>
-          </select>
-        </div>
-        <button
-          onClick={handleUpdateSettings}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-blue-700"
-        >
-          Simpan Pengaturan
-        </button>
-      </div>
 
-      {/* Kontrol Data */}
-      <div className="space-y-4 pt-6 border-t">
-        <h3 className="text-xl font-semibold">Kontrol Data (Demo)</h3>
-        <button
-          onClick={handleSeed}
-          className="w-full bg-green-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-green-700"
-        >
-          Seed Demo Data
-        </button>
-        <button
-          onClick={handleReset}
-          className="w-full bg-red-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-red-700"
-        >
-          Reset Semua Data
-        </button>
+        {/* Bagian Laporan */}
+        <div className="divider"></div>
+        <div>
+          <h4 className="text-lg font-semibold mb-2">Laporan Turnamen</h4>
+          <div className="flex gap-2">
+            <button 
+              // onClick={() => downloadReport('participants')}
+              className="btn btn-success"
+            >
+              Unduh Laporan Peserta
+            </button>
+            <button 
+              // onClick={() => downloadReport('results')}
+              className="btn btn-success"
+            >
+              Unduh Hasil Pertandingan
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
