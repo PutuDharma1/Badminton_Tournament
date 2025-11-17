@@ -1,10 +1,23 @@
-from flask import Flask, jsonify
+from flask import Flask
+from prisma import Prisma, register
+from routes.user import user_blueprint
+from routes.post import post_blueprint
+
+
+db = Prisma()
+db.connect()
+register(db)
 
 app = Flask(__name__)
 
-@app.route('/health')
-def health():
-    return jsonify({"status": "ok", "message": "Backend is running"})
+@app.route('/', methods=['GET'])
+def index():
+  return {
+    "ping": "pong"
+  }
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+app.register_blueprint(user_blueprint, url_prefix='/user')
+
+if __name__ == "__main__":
+
+  app.run(debug=True, port=5000, threaded=True)
