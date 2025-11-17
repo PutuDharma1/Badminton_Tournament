@@ -4,6 +4,8 @@ import Dashboard from './pages/Dashboard';
 import Peserta from './pages/Peserta';
 import Wasit from './pages/Wasit';
 import Panitia from './pages/Panitia';
+// Pastikan Anda mengimpor GlobalContext jika Anda menggunakannya
+import { useGlobalContext } from './context/GlobalContext'; 
 
 const TABS = {
   DASHBOARD: 'Dashboard',
@@ -14,6 +16,9 @@ const TABS = {
 
 function App() {
   const [activeTab, setActiveTab] = useState(TABS.DASHBOARD);
+  
+  // (Opsional) Anda bisa mengambil data dari context jika perlu
+  // const { tournament } = useGlobalContext();
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -30,13 +35,14 @@ function App() {
   };
 
   return (
-    // Gunakan warna tema daisyUI untuk latar belakang
+    //  👇 PERUBAHAN DI SINI: Tambahkan 'bg-base-200'
     <div className="min-h-screen bg-base-200">
-      {/* === NAVBAR BARU MENGGUNAKAN daisyUI === */}
+      
+      {/* Navbar Anda (ini sudah benar) */}
       <div className="navbar bg-base-100 shadow-lg">
         <div className="navbar-start">
           <a className="btn btn-ghost text-xl text-blue-800 font-bold">
-            🏸 Tournament
+            🏸 TournaMan
           </a>
         </div>
         <div className="navbar-center hidden lg:flex">
@@ -45,7 +51,6 @@ function App() {
               <li key={tab}>
                 <a
                   onClick={() => setActiveTab(tab)}
-                  // Ganti logika 'className' dengan 'active'
                   className={activeTab === tab ? 'active' : ''}
                 >
                   {tab}
@@ -55,13 +60,11 @@ function App() {
           </ul>
         </div>
         <div className="navbar-end">
-          {/* Anda bisa tambahkan tombol Login/Logout di sini */}
           <a className="btn btn-primary">Login</a>
         </div>
       </div>
-      {/* === AKHIR NAVBAR === */}
 
-      {/* Beri padding pada konten utama */}
+      {/* Konten Utama */}
       <main className="p-4 md:p-8 max-w-7xl mx-auto">
         {renderTabContent()}
       </main>
