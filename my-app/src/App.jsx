@@ -36,7 +36,7 @@ function App() {
       <div className="navbar bg-base-100 shadow-lg">
         <div className="navbar-start">
           <a className="btn btn-ghost text-xl text-blue-800 font-bold">
-            🏸 TournaMan
+            🏸 Tournament
           </a>
         </div>
         <div className="navbar-center hidden lg:flex">
