@@ -1,39 +1,26 @@
 # Server/routes/auth.py
+
 from flask import Blueprint, request, jsonify
-from prisma import Prisma
+from extensions import db  # Pastikan impor dari extensions
 
-auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
-db = Prisma()
-
-
-@auth_bp.before_app_first_request
-def connect_db():
-    if not db.is_connected():
-        db.connect()
+# 1. MEMBUAT blueprint-nya
+# Pastikan namanya 'auth_blueprint' agar konsisten dengan app.py
+auth_blueprint = Blueprint('auth', __name__, url_prefix='/api/auth')
 
 
-@auth_bp.route("/login", methods=["POST"])
+# 2. MENDEFINISIKAN route-nya
+@auth_blueprint.route('/login', methods=['POST'])
 def login():
-    data = request.get_json() or {}
-    email = data.get("email")
-    password = data.get("password")
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
 
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
-
-    user = db.user.find_unique(where={"email": email})
-    if not user:
-        return jsonify({"error": "Invalid email or password"}), 401
-
-    # NOTE: Sekarang masih plain text; kalau mau aman pakai hash (bcrypt)
-    if user.password != password:
-        return jsonify({"error": "Invalid email or password"}), 401
-
-    return jsonify(
-        {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role,  
-        }
-    )
+    # Logika placeholder sederhana untuk login
+    # Ganti ini dengan logika verifikasi user Anda yang sebenarnya
+    if username == 'admin' and password == 'admin':
+        # Di dunia nyata, Anda akan mengembalikan JWT atau session token
+        return jsonify({"message": "Login berhasil", "role": "admin"}), 200
+    elif username == 'wasit' and password == 'wasit':
+        return jsonify({"message": "Login berhasil", "role": "referee"}), 200
+    
+    return jsonify({"error": "Username atau password salah"}), 401
