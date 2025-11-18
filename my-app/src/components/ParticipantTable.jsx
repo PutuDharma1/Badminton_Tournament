@@ -1,65 +1,99 @@
 // my-app/src/components/ParticipantTable.jsx
-import React, { useState, useEffect } from 'react';
 
-function ParticipantTable() {
-  const [participants, setParticipants] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+import React, { useContext } from 'react';
+import { GlobalContext } from '../context/GlobalContext';
+import { calculateAge } from '../utils/ageCalculator'; // Asumsi util ini ada
 
-  useEffect(() => {
-    const fetchParticipants = async () => {
-      try {
-        // Ganti '1' dengan ID turnamen dinamis jika perlu
-        const response = await fetch('http://127.0.0.1:5000/participant/list/1'); 
-        const data = await response.json();
-        setParticipants(data.data || []);
-      } catch (error) {
-        console.error("Gagal mengambil peserta:", error);
-      } finally {
-        setIsLoading(false);
+// Terima 'fetchParticipants' sebagai prop
+function ParticipantTable({ participants, fetchParticipants }) { 
+  const { state } = useContext(GlobalContext);
+
+  const handleDelete = async (participantId, participantName) => {
+    // Konfirmasi sebelum menghapus
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus peserta "${participantName}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${state.api_url}/participants/${participantId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Gagal menghapus peserta');
       }
-    };
-    fetchParticipants();
-  }, []); // TODO: Tambahkan dependency untuk refresh data
+
+      alert(data.message || 'Peserta berhasil dihapus');
+      fetchParticipants(); // Panggil fungsi refresh dari parent
+    } catch (error) {
+      console.error('Error deleting participant:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
 
   return (
-    <div className="card bg-base-100 shadow-xl">
-      <div className="card-body">
-        <h3 className="card-title">Daftar Peserta Terdaftar</h3>
-        
-        {isLoading ? (
-          <div className="flex justify-center p-10">
-            <span className="loading loading-lg loading-spinner"></span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="table table-zebra w-full">
-              <thead>
-                <tr>
-                  <th>Nama</th>
-                  <th>Email</th>
-                  <th>Kategori</th>
-                  <th>Usia (saat turnamen)</th>
+    <div className="bg-white shadow-md rounded-lg overflow-hidden">
+      <h2 className="text-xl font-semibold p-4 border-b">Daftar Peserta Terdaftar</h2>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                No
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nama
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Gender
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Usia
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Kategori
+              </th>
+              {/* Kolom baru untuk Aksi */}
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Aksi
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {participants.length > 0 ? (
+              participants.map((p, index) => (
+                <tr key={p.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{index + 1}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{p.gender}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {calculateAge(p.dob)} Thn
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {p.category ? p.category.name : 'N/A'}
+                  </td>
+                  {/* Tombol Hapus */}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleDelete(p.id, p.name)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Hapus
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {participants.length > 0 ? (
-                  participants.map(p => (
-                    <tr key={p.id}>
-                      <td>{p.fullName}</td>
-                      <td>{p.email || '-'}</td>
-                      <td>{p.category ? p.category.name : 'Belum ada'}</td>
-                      <td>{p.age || '?'} thn</td> 
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="text-center">Belum ada peserta terdaftar.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                  Belum ada peserta yang terdaftar.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

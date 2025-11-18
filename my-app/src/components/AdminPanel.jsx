@@ -1,18 +1,7 @@
-// my-app/src/components/AdminPanel.jsx
 import React from 'react';
 import { useGlobalContext } from '../context/GlobalContext';
 
-// Komponen ini akan berisi logika untuk:
-// 1. Melihat semua kategori dan jumlah peserta
-// 2. Mengedit/Merge/Split kategori
-// 3. Memicu Generate Jadwal (Round Robin / Knockout)
-// 4. Mengunduh laporan
-
 function AdminPanel() {
-  // Anda akan uncomment ini saat context Anda siap
-  // const { categories, participants, generateSchedule, downloadReport } = useGlobalContext();
-
-  // Placeholder data, ganti dengan data dari context
   const categories = [
     {id: 1, name: 'Tunggal Putra U-15'},
     {id: 2, name: 'Ganda Putra Dewasa'},
