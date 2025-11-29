@@ -1,116 +1,151 @@
-import React, { useState, useEffect, useContext } from 'react';
-import ParticipantRegister from '../components/ParticipantRegister';
-import ParticipantTable from '../components/ParticipantTable';
-import { GlobalContext } from '../context/GlobalContext';
+import React, { useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
+
+// ========= Helper kecil =========
+const calculateAge = (dobStr) => {
+  const today = new Date();
+  const dob = new Date(dobStr);
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+};
+
+const getCategoryForAge = (age) => {
+  if (age < 13) return "U13";
+  if (age < 15) return "U15";
+  if (age < 17) return "U17";
+  if (age < 19) return "U19";
+  return "OPEN";
+};
 
 function Peserta() {
-  const [participants, setParticipants] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const { state } = useContext(GlobalContext);
+  const context = useOutletContext();
+  const { players, handleAddPlayer } = context;
 
-  const fetchParticipants = async () => {
-    try {
-      const response = await fetch(`${state.api_url}/participants/`);
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const data = await response.json();
-      setParticipants(data);
-    } catch (error) {
-      console.error('Error fetching participants:', error);
+  const [name, setName] = useState("");
+  const [dob, setDob] = useState("");
+  const [message, setMessage] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setMessage("");
+
+    if (!name || !dob) {
+      setMessage("Nama dan tanggal lahir wajib diisi.");
+      return;
     }
-  };
 
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch(`${state.api_url}/categories/`);
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const data = await response.json();
-      setCategories(data);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
+    const age = calculateAge(dob);
+    const category = getCategoryForAge(age);
 
-  useEffect(() => {
-    fetchParticipants();
-    fetchCategories();
-  }, []);
+    handleAddPlayer({
+      name,
+      dob,
+      age,
+      category,
+    });
 
-  const handleSeed = async (count) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${state.api_url}/participants/seed/${count}`, {
-        method: 'POST',
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `Failed to seed ${count} participants`);
-      }
-
-      alert(data.message); 
-      fetchParticipants();
-    } catch (error) {
-      console.error('Error seeding participants:', error);
-      alert(`Error: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
+    setMessage(
+      `Pendaftaran berhasil. ${name} masuk kategori ${category} (umur ${age} tahun).`
+    );
+    setName("");
+    setDob("");
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">Manajemen Peserta</h1>
+    <div className="main-content">
+      <h1 className="page-title">Players Management</h1>
+      <p className="page-subtitle">
+        Daftarkan pemain baru dan lihat daftar pemain yang sudah terdaftar.
+      </p>
 
-      <div className="mb-6 p-4 border rounded-lg shadow-sm bg-gray-50">
-        <h2 className="text-lg font-semibold mb-3">Shortcut Data Dummy (Sementara)</h2>
-        <p className="text-sm text-gray-600 mb-3">
-          Gunakan tombol ini untuk menambahkan data peserta dummy secara cepat.
+      {/* Form pendaftaran pemain */}
+
+      <div className="form-card">
+        <h2 className="form-title">Register New Player</h2>
+        <p className="form-subtitle">
+          Masukkan nama dan tanggal lahir, sistem akan otomatis menentukan
+          kategori umur.
         </p>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => handleSeed(16)}
-            disabled={loading}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400"
-          >
-            {loading ? 'Loading...' : 'Seed 16 Pemain'}
+
+        {message && (
+          <p style={{ fontSize: 13, marginBottom: 8, color: "#a5f3fc" }}>
+            {message}
+          </p>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Nama Pemain</label>
+            <input
+              className="form-input"
+              placeholder="Nama Lengkap"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Tanggal Lahir</label>
+            <input
+              type="date"
+              className="form-input"
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+            />
+            <p className="form-helper">
+              Format: YYYY-MM-DD. Contoh: 2008-05-12.
+            </p>
+          </div>
+
+          <button className="btn-primary mt-16" type="submit">
+            Daftarkan Pemain
           </button>
-          <button
-            onClick={() => handleSeed(32)}
-            disabled={loading}
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400"
-          >
-            {loading ? 'Loading...' : 'Seed 32 Pemain'}
-          </button>
-          <button
-            onClick={() => handleSeed(64)}
-            disabled={loading}
-            className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded disabled:bg-gray-400"
-          >
-            {loading ? 'Loading...' : 'Seed 64 Pemain'}
-          </button>
-        </div>
-        {loading && <p className="text-sm text-gray-700 mt-2">Menambahkan data dummy...</p>}
+        </form>
       </div>
 
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-1">
-          <ParticipantRegister 
-            categories={categories} 
-            onParticipantRegistered={fetchParticipants} 
-          />
-        </div>
-        <div className="md:col-span-2">
-          <ParticipantTable 
-            participants={participants} 
-            fetchParticipants={fetchParticipants} 
-          />
-        </div>
+      {/* Tabel pemain */}
+      <h2 className="section-title" style={{ marginTop: 24 }}>
+        Daftar Pemain Terdaftar
+      </h2>
+      <div className="card mt-8">
+        {players.length === 0 ? (
+          <p style={{ fontSize: 14, color: "#9ca3af" }}>
+            Belum ada pemain terdaftar.
+          </p>
+        ) : (
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: 13,
+            }}
+          >
+            <thead>
+              <tr style={{ textAlign: "left", color: "#9ca3af" }}>
+                <th style={{ padding: "6px 4px" }}>#</th>
+                <th style={{ padding: "6px 4px" }}>Nama</th>
+                <th style={{ padding: "6px 4px" }}>Tanggal Lahir</th>
+                <th style={{ padding: "6px 4px" }}>Umur</th>
+                <th style={{ padding: "6px 4px" }}>Kategori</th>
+              </tr>
+            </thead>
+            <tbody>
+              {players.map((p, idx) => (
+                <tr key={p.id} style={{ borderTop: "1px solid #111827" }}>
+                  <td style={{ padding: "6px 4px" }}>{idx + 1}</td>
+                  <td style={{ padding: "6px 4px" }}>{p.name}</td>
+                  <td style={{ padding: "6px 4px" }}>{p.dob}</td>
+                  <td style={{ padding: "6px 4px" }}>{p.age}</td>
+                  <td style={{ padding: "6px 4px" }}>{p.category}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

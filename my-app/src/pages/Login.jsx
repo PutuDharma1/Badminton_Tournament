@@ -1,75 +1,123 @@
-// src/pages/Login.jsx
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 function Login() {
   const navigate = useNavigate();
+  const { login, loading } = useAuth();
 
-  // State ini sebenarnya sudah tidak dipakai untuk cek ke server,
-  // tapi boleh tetap ada supaya form kelihatan realistis.
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [error, setError] = useState('');
 
-  // LOGIN BYPASS: tidak ada fetch ke backend
-  const handleLogin = () => {
-    // Dummy user yang akan disimpan ke localStorage
-    const dummyUser = {
-      id: 1,
-      name: "Dummy Committee",
-      email: email || "dummy@sporthive.com",
-      role: "COMMITTEE", // penting: harus cocok dengan allowedRoles di App.jsx
-    };
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+    // Clear error when user starts typing
+    if (error) setError('');
+  };
 
-    // Simpan user ke localStorage (dipakai ProtectedRoute di App.jsx)
-    localStorage.setItem("user", JSON.stringify(dummyUser));
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
 
-    // Arahkan user ke dashboard panitia
-    navigate("/committee-dashboard");
+    // Validation
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    try {
+      const user = await login(formData.email, formData.password);
+
+      // Redirect based on role
+      const redirectRoutes = {
+        COMMITTEE: '/committee',
+        PLAYER: '/player',
+        REFEREE: '/referee',
+        ADMIN: '/',
+      };
+
+      navigate(redirectRoutes[user.role] || '/');
+    } catch (err) {
+      setError(err.message || 'Invalid email or password');
+    }
   };
 
   return (
-    <div className="main-content">
-      <div className="form-card">
-        <h2 className="form-title">Login (Bypass Mode)</h2>
+    <div className="main-content" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
+      <div className="form-card" style={{ maxWidth: 420, width: '100%' }}>
+        <h2 className="form-title">Welcome Back</h2>
         <p className="form-subtitle">
-          Untuk sementara, login tidak terhubung ke server. Klik tombol Login
-          untuk langsung masuk sebagai <strong>Committee</strong>.
+          Sign in to your account to manage tournaments
         </p>
 
-        <div className="form-group">
-          <label className="form-label">Email (opsional)</label>
-          <input
-            type="email"
-            className="form-input"
-            placeholder="example@mail.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <p className="form-helper">
-            Ini hanya untuk tampilan saja, tidak dicek ke server.
+        {error && (
+          <div style={{
+            padding: '12px',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '6px',
+            marginBottom: '16px'
+          }}>
+            <p style={{ color: '#dc2626', fontSize: '14px', margin: 0 }}>{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input
+              type="email"
+              name="email"
+              className="form-input"
+              placeholder="you@example.com"
+              value={formData.email}
+              onChange={handleChange}
+              disabled={loading}
+              autoFocus
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <input
+              type="password"
+              name="password"
+              className="form-input"
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={handleChange}
+              disabled={loading}
+            />
+          </div>
+
+          <button
+            className="btn-primary mt-16"
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', opacity: loading ? 0.7 : 1 }}
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          <p style={{ color: '#9ca3af', fontSize: '14px' }}>
+            Don't have an account?{' '}
+            <Link to="/register" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 500 }}>
+              Sign up
+            </Link>
           </p>
         </div>
-
-        <div className="form-group">
-          <label className="form-label">Password (opsional)</label>
-          <input
-            type="password"
-            className="form-input"
-            placeholder="••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <p className="form-helper">
-            Password juga tidak diverifikasi di mode bypass ini.
-          </p>
-        </div>
-
-        <button className="btn-primary mt-16" onClick={handleLogin}>
-          Login sebagai Committee
-        </button>
       </div>
     </div>
   );
 }
 
 export default Login;
+
