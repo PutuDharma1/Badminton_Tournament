@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
 import matchesApi from '../api/matches';
+import Toast from '../components/Toast';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 function TournamentManagement() {
   const { id } = useParams();
@@ -15,10 +17,18 @@ function TournamentManagement() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // UI State
+  const [toast, setToast] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     fetchTournament();
   }, [id]);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
 
   const fetchTournament = async () => {
     try {
@@ -35,20 +45,27 @@ function TournamentManagement() {
   const handleStartRoundRobin = async () => {
     const participantCount = tournament.participants?.length || 0;
 
-    if (participantCount % 8 !== 0) {
-      alert(`Round-robin requires a multiple of 8 players. You currently have ${participantCount} players.`);
+    if (participantCount < 3) {
+      showToast(`Round-robin requires at least 3 players. You currently have ${participantCount} players.`, 'error');
       return;
     }
 
-    if (!confirm(`Start round-robin matching with ${participantCount} players?`)) return;
-
-    try {
-      await tournamentsApi.startRoundRobin(tournament.id);
-      alert('Round-robin started successfully!');
-      fetchTournament();
-    } catch (err) {
-      alert(err.message);
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Start Round-Robin',
+      message: `Are you sure you want to start round-robin matching with ${participantCount} players? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await tournamentsApi.startRoundRobin(tournament.id);
+          showToast('Round-robin started successfully!', 'success');
+          fetchTournament();
+          setConfirmModal({ ...confirmModal, isOpen: false });
+        } catch (err) {
+          showToast(err.message, 'error');
+          setConfirmModal({ ...confirmModal, isOpen: false });
+        }
+      }
+    });
   };
 
   const handleUpdateTournament = async (updates) => {
@@ -56,8 +73,9 @@ function TournamentManagement() {
       const updated = await tournamentsApi.updateTournament(tournament.id, updates);
       setTournament(updated);
       setShowEditModal(false);
+      showToast('Tournament updated successfully!', 'success');
     } catch (err) {
-      alert(err.message);
+      showToast(err.message, 'error');
     }
   };
 
@@ -85,7 +103,7 @@ function TournamentManagement() {
   const isCommittee = hasRole('COMMITTEE');
   const participantCount = tournament.participants?.length || 0;
   const matchCount = tournament.matches?.length || 0;
-  const canStartRoundRobin = tournament.status === 'DRAFT' && participantCount % 8 === 0 && participantCount >= 8;
+  const canStartRoundRobin = tournament.status === 'DRAFT' && participantCount >= 3;
   const registrationClosed = tournament.registrationDeadline && new Date(tournament.registrationDeadline) < new Date();
 
   return (
@@ -159,7 +177,7 @@ function TournamentManagement() {
           </div>
           <div className="stat-value">{participantCount}</div>
           <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-            {participantCount % 8 === 0 ? '✓ Ready for round-robin' : `Need ${8 - (participantCount % 8)} more for next group`}
+            {participantCount >= 3 ? '✓ Ready for round-robin' : `Need ${3 - participantCount} more`}
           </p>
         </div>
 
@@ -316,9 +334,26 @@ function TournamentManagement() {
           onSuccess={() => {
             setShowAddPlayerModal(false);
             fetchTournament();
+            showToast('Player added successfully!', 'success');
           }}
         />
       )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
     </div>
   );
 }
@@ -374,7 +409,7 @@ function MatchCard({ match, isCommittee, onUpdate }) {
     } catch (err) {
       alert(err.message);
     } finally {
-      setUpd(false);
+      setUpdating(false);
     }
   };
 
@@ -800,7 +835,6 @@ function OnlineRegistrationForm({ tournament, onSuccess, onError, loading, setLo
 
     try {
       setLoading(true);
-      onError('');
       const { participantsApi } = await import('../api/participants');
       await participantsApi.addOnlineParticipant(tournament.id, selectedUser.id);
       onSuccess();
@@ -813,76 +847,48 @@ function OnlineRegistrationForm({ tournament, onSuccess, onError, loading, setLo
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16 }}>
-        Search for registered players to add to the tournament
-      </p>
-
       <div className="form-group">
-        <label className="form-label">Search Players</label>
+        <label className="form-label">Search User</label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
             type="text"
             className="form-input"
-            placeholder="Search by name or email..."
+            placeholder="Search by name or email"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             disabled={loading}
-            style={{ flex: 1 }}
           />
-          <button
-            className="btn-primary"
-            onClick={handleSearch}
-            disabled={searching || loading}
-            style={{ opacity: (searching || loading) ? 0.7 : 1 }}
-          >
-            {searching ? 'Searching...' : 'Search'}
+          <button className="btn-outline" onClick={handleSearch} disabled={searching || loading}>
+            {searching ? '...' : 'Search'}
           </button>
         </div>
       </div>
 
       {searchResults.length > 0 && (
-        <div style={{ marginTop: 16, maxHeight: 200, overflow: 'auto' }}>
-          <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 8 }}>
-            Select a player:
-          </p>
+        <div style={{ marginBottom: 16, maxHeight: 150, overflow: 'auto', border: '1px solid #334155', borderRadius: 8 }}>
           {searchResults.map(user => (
             <div
               key={user.id}
               onClick={() => setSelectedUser(user)}
               style={{
-                padding: 12,
-                background: selectedUser?.id === user.id ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.5)',
-                border: selectedUser?.id === user.id ? '1px solid #60a5fa' : '1px solid #334155',
-                borderRadius: 8,
-                marginBottom: 8,
+                padding: '8px 12px',
                 cursor: 'pointer',
-                transition: 'all 0.2s',
+                background: selectedUser?.id === user.id ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                borderBottom: '1px solid #1e293b'
               }}
             >
               <div style={{ fontSize: 14, fontWeight: 500 }}>{user.name}</div>
               <div style={{ fontSize: 12, color: '#9ca3af' }}>{user.email}</div>
-              {user.birthDate && (
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                  Born: {new Date(user.birthDate).toLocaleDateString()}
-                </div>
-              )}
             </div>
           ))}
         </div>
       )}
 
-      {searchQuery && searchResults.length === 0 && !searching && (
-        <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 16, textAlign: 'center' }}>
-          No players found. Try a different search.
-        </p>
-      )}
-
       <button
         className="btn-primary"
         onClick={handleAddPlayer}
-        disabled={!selectedUser || loading}
-        style={{ width: '100%', marginTop: 16, opacity: (!selectedUser || loading) ? 0.5 : 1 }}
+        disabled={loading || !selectedUser}
+        style={{ width: '100%' }}
       >
         {loading ? 'Adding...' : 'Add Selected Player'}
       </button>
@@ -895,26 +901,22 @@ function OfflineRegistrationForm({ tournament, onSuccess, onError, loading, setL
   const [formData, setFormData] = useState({
     offlineName: '',
     offlineBirthDate: '',
-    offlineGender: '',
+    offlineGender: 'MALE',
     offlinePhone: '',
   });
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    onError('');
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!formData.offlineName || !formData.offlineBirthDate || !formData.offlineGender) {
-      onError('Please fill in all required fields');
+  const handleSubmit = async () => {
+    if (!formData.offlineName || !formData.offlineBirthDate) {
+      onError('Name and Birth Date are required');
       return;
     }
 
     try {
       setLoading(true);
-      onError('');
       const { participantsApi } = await import('../api/participants');
       await participantsApi.addOfflineParticipant(tournament.id, formData);
       onSuccess();
@@ -927,73 +929,64 @@ function OfflineRegistrationForm({ tournament, onSuccess, onError, loading, setL
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 16 }}>
-        Manually add a player who doesn't have an account
-      </p>
-
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label className="form-label">Full Name *</label>
-          <input
-            type="text"
-            name="offlineName"
-            className="form-input"
-            placeholder="John Doe"
-            value={formData.offlineName}
-            onChange={handleChange}
-            disabled={loading}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Birth Date *</label>
-          <input
-            type="date"
-            name="offlineBirthDate"
-            className="form-input"
-            value={formData.offlineBirthDate}
-            onChange={handleChange}
-            disabled={loading}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Gender *</label>
-          <select
-            name="offlineGender"
-            className="form-input"
-            value={formData.offlineGender}
-            onChange={handleChange}
-            disabled={loading}
-          >
-            <option value="">Select gender</option>
-            <option value="MALE">Male</option>
-            <option value="FEMALE">Female</option>
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Phone (Optional)</label>
-          <input
-            type="tel"
-            name="offlinePhone"
-            className="form-input"
-            placeholder="+1234567890"
-            value={formData.offlinePhone}
-            onChange={handleChange}
-            disabled={loading}
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="btn-primary"
+      <div className="form-group">
+        <label className="form-label">Full Name</label>
+        <input
+          type="text"
+          name="offlineName"
+          className="form-input"
+          value={formData.offlineName}
+          onChange={handleChange}
           disabled={loading}
-          style={{ width: '100%', opacity: loading ? 0.7 : 1 }}
+        />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Birth Date</label>
+        <input
+          type="date"
+          name="offlineBirthDate"
+          className="form-input"
+          value={formData.offlineBirthDate}
+          onChange={handleChange}
+          disabled={loading}
+        />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Gender</label>
+        <select
+          name="offlineGender"
+          className="form-input"
+          value={formData.offlineGender}
+          onChange={handleChange}
+          disabled={loading}
         >
-          {loading ? 'Adding...' : 'Add Player'}
-        </button>
-      </form>
+          <option value="MALE">Male</option>
+          <option value="FEMALE">Female</option>
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Phone (Optional)</label>
+        <input
+          type="text"
+          name="offlinePhone"
+          className="form-input"
+          value={formData.offlinePhone}
+          onChange={handleChange}
+          disabled={loading}
+        />
+      </div>
+
+      <button
+        className="btn-primary"
+        onClick={handleSubmit}
+        disabled={loading}
+        style={{ width: '100%' }}
+      >
+        {loading ? 'Adding...' : 'Add Offline Player'}
+      </button>
     </div>
   );
 }

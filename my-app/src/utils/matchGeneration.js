@@ -58,16 +58,8 @@ export function calculateTotalMatches(participantCount) {
  * For this app: must be multiple of 8
  */
 export function validateParticipantCount(count) {
-    if (count < 8) {
-        return { valid: false, message: `Need at least 8 participants. Currently have ${count}.` };
-    }
-
-    if (count % 8 !== 0) {
-        const needed = 8 - (count % 8);
-        return {
-            valid: false,
-            message: `Need ${needed} more participant${needed > 1 ? 's' : ''} to reach a multiple of 8. Currently have ${count}.`
-        };
+    if (count < 3) {
+        return { valid: false, message: `Need at least 3 participants. Currently have ${count}.` };
     }
 
     return { valid: true, message: 'Participant count is valid' };

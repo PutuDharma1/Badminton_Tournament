@@ -93,9 +93,9 @@ export const tournamentsApi = {
 
             const participantCount = tournament.participants?.length || 0;
 
-            // Check if participant count is multiple of 8
-            if (participantCount % 8 !== 0) {
-                throw new Error(`Tournament requires a multiple of 8 players. Currently has ${participantCount} players.`);
+            // Check if participant count is sufficient
+            if (participantCount < 3) {
+                throw new Error(`Tournament requires at least 3 players. Currently has ${participantCount} players.`);
             }
 
             // Generate matches using the round-robin utility

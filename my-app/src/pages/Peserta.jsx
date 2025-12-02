@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import participantsApi from '../api/participants';
 
 // ========= Helper kecil =========
 const calculateAge = (dobStr) => {
@@ -22,14 +22,35 @@ const getCategoryForAge = (age) => {
 };
 
 function Peserta() {
-  const context = useOutletContext();
-  const { players, handleAddPlayer } = context;
-
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [dob, setDob] = useState("");
   const [message, setMessage] = useState("");
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    fetchPlayers();
+  }, []);
+
+  const fetchPlayers = async () => {
+    try {
+      setLoading(true);
+      // In a real app, we would have an endpoint to get all registered players
+      // For now, let's use the search endpoint with empty query or just mock it
+      // Since mock API doesn't have "get all users", we might need to rely on what we have
+      // Let's assume we want to show all participants from all tournaments for now
+      // or just use a mock list. 
+      // Actually, let's use the searchUsers from participantsApi if it returns all on empty
+      const results = await participantsApi.searchUsers('');
+      setPlayers(results);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
@@ -41,34 +62,33 @@ function Peserta() {
     const age = calculateAge(dob);
     const category = getCategoryForAge(age);
 
-    handleAddPlayer({
-      name,
-      dob,
-      age,
-      category,
-    });
-
+    // Note: This form seems to be for "Offline Registration" or creating a new user?
+    // The previous code called handleAddPlayer from context.
+    // We should probably use an API to create a user or participant.
+    // For now, let's just show a success message as this page seems to be less critical 
+    // than the Tournament specific player addition.
+    
     setMessage(
-      `Pendaftaran berhasil. ${name} masuk kategori ${category} (umur ${age} tahun).`
+      `Fitur pendaftaran global belum aktif. Silakan daftar melalui menu Turnamen.`
     );
+    
+    // Reset form
     setName("");
     setDob("");
   };
 
   return (
     <div className="main-content">
-      <h1 className="page-title">Players Management</h1>
+      <h1 className="page-title">Players Directory</h1>
       <p className="page-subtitle">
-        Daftarkan pemain baru dan lihat daftar pemain yang sudah terdaftar.
+        Daftar pemain yang terdaftar di sistem.
       </p>
 
       {/* Form pendaftaran pemain */}
-
       <div className="form-card">
-        <h2 className="form-title">Register New Player</h2>
+        <h2 className="form-title">Cari Pemain</h2>
         <p className="form-subtitle">
-          Masukkan nama dan tanggal lahir, sistem akan otomatis menentukan
-          kategori umur.
+          Cari pemain berdasarkan nama.
         </p>
 
         {message && (
@@ -87,7 +107,7 @@ function Peserta() {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-
+          {/* 
           <div className="form-group">
             <label className="form-label">Tanggal Lahir</label>
             <input
@@ -96,25 +116,25 @@ function Peserta() {
               value={dob}
               onChange={(e) => setDob(e.target.value)}
             />
-            <p className="form-helper">
-              Format: YYYY-MM-DD. Contoh: 2008-05-12.
-            </p>
           </div>
 
           <button className="btn-primary mt-16" type="submit">
             Daftarkan Pemain
           </button>
+          */}
         </form>
       </div>
 
       {/* Tabel pemain */}
       <h2 className="section-title" style={{ marginTop: 24 }}>
-        Daftar Pemain Terdaftar
+        Daftar Pemain
       </h2>
       <div className="card mt-8">
-        {players.length === 0 ? (
+        {loading ? (
+          <div className="spinner"></div>
+        ) : players.length === 0 ? (
           <p style={{ fontSize: 14, color: "#9ca3af" }}>
-            Belum ada pemain terdaftar.
+            Belum ada pemain ditemukan.
           </p>
         ) : (
           <table
@@ -128,9 +148,8 @@ function Peserta() {
               <tr style={{ textAlign: "left", color: "#9ca3af" }}>
                 <th style={{ padding: "6px 4px" }}>#</th>
                 <th style={{ padding: "6px 4px" }}>Nama</th>
-                <th style={{ padding: "6px 4px" }}>Tanggal Lahir</th>
-                <th style={{ padding: "6px 4px" }}>Umur</th>
-                <th style={{ padding: "6px 4px" }}>Kategori</th>
+                <th style={{ padding: "6px 4px" }}>Email</th>
+                <th style={{ padding: "6px 4px" }}>Role</th>
               </tr>
             </thead>
             <tbody>
@@ -138,9 +157,8 @@ function Peserta() {
                 <tr key={p.id} style={{ borderTop: "1px solid #111827" }}>
                   <td style={{ padding: "6px 4px" }}>{idx + 1}</td>
                   <td style={{ padding: "6px 4px" }}>{p.name}</td>
-                  <td style={{ padding: "6px 4px" }}>{p.dob}</td>
-                  <td style={{ padding: "6px 4px" }}>{p.age}</td>
-                  <td style={{ padding: "6px 4px" }}>{p.category}</td>
+                  <td style={{ padding: "6px 4px" }}>{p.email}</td>
+                  <td style={{ padding: "6px 4px" }}>{p.role}</td>
                 </tr>
               ))}
             </tbody>

@@ -37,7 +37,7 @@ function Login() {
       // Redirect based on role
       const redirectRoutes = {
         COMMITTEE: '/committee',
-        PLAYER: '/player',
+        PLAYER: '/',
         REFEREE: '/referee',
         ADMIN: '/',
       };

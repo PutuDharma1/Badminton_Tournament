@@ -37,7 +37,7 @@ body {
 .main-content {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 24px 16px 40px;
+  padding: 24px 32px 40px;
 }
 
 /* Scrollbar (optional, biar lebih clean) */
@@ -190,6 +190,7 @@ body {
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 0.02em;
+  padding-left: 10px;
 }
 
 .page-subtitle {
