@@ -25,7 +25,7 @@ export const participantsApi = {
             return participants;
         }
 
-        return await apiClient.get(`/tournaments/${tournamentId}/participants`);
+        return await apiClient.get(`/api/participants?tournamentId=${tournamentId}`);
     },
 
     // Add online participant (registered user)

@@ -94,7 +94,7 @@ export const authApi = {
             return { user: userWithoutPassword };
         }
 
-        const response = await apiClient.put(`/auth/users/${userId}`, data);
+        const response = await apiClient.put(`/api/auth/users/${userId}`, data);
 
         // Update local storage if successful
         if (response.user) {

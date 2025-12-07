@@ -22,7 +22,7 @@ export const tournamentsApi = {
             return getMockTournaments();
         }
 
-        return await apiClient.get('/tournaments');
+        return await apiClient.get('/api/tournaments');
     },
 
     // Get tournament by ID
@@ -36,7 +36,7 @@ export const tournamentsApi = {
             return tournament;
         }
 
-        return await apiClient.get(`/tournaments/${id}`);
+        return await apiClient.get(`/api/tournaments/${id}`);
     },
 
     // Create tournament
@@ -47,7 +47,7 @@ export const tournamentsApi = {
             return newTournament;
         }
 
-        return await apiClient.post('/tournaments', data);
+        return await apiClient.post('/api/tournaments', data);
     },
 
     // Update tournament
@@ -61,7 +61,7 @@ export const tournamentsApi = {
             return updated;
         }
 
-        return await apiClient.put(`/tournaments/${id}`, data);
+        return await apiClient.put(`/api/tournaments/${id}`, data);
     },
 
     // Delete tournament
@@ -75,7 +75,7 @@ export const tournamentsApi = {
             return { message: 'Tournament deleted successfully' };
         }
 
-        return await apiClient.delete(`/tournaments/${id}`);
+        return await apiClient.delete(`/api/tournaments/${id}`);
     },
 
     // Start round-robin for tournament
@@ -114,7 +114,7 @@ export const tournamentsApi = {
             return { message: 'Round-robin started', matchCount: newMatches.length };
         }
 
-        return await apiClient.post(`/tournaments/${tournamentId}/start`);
+        return await apiClient.post(`/api/tournaments/${tournamentId}/start`);
     },
 
     // Add committee member to tournament
@@ -124,7 +124,7 @@ export const tournamentsApi = {
             return { message: 'Committee member added' };
         }
 
-        return await apiClient.post(`/tournaments/${tournamentId}/committee`, { userId });
+        return await apiClient.post(`/api/tournaments/${tournamentId}/committee`, { userId });
     },
 };
 

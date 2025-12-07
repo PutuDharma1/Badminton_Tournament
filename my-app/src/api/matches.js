@@ -36,7 +36,7 @@ export const matchesApi = {
             return matches;
         }
 
-        return await apiClient.get(`/tournaments/${tournamentId}/matches`);
+        return await apiClient.get(`/api/matches?tournamentId=${tournamentId}`);
     },
 
     // Assign referee to match
