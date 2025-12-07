@@ -1,197 +1,171 @@
-from prisma import Prisma
+from app import app
+from extensions import db, bcrypt
+from models import User, Tournament, Category, Participant, Team, TeamParticipant, Court, Match
 from datetime import datetime
 
-db = Prisma()
+def seed_data():
+    with app.app_context():
+        print("Deleting old data...")
+        # Delete in reverse order of dependencies
+        db.session.query(Match).delete()
+        db.session.query(TeamParticipant).delete()
+        db.session.query(Team).delete()
+        db.session.query(Participant).delete()
+        db.session.query(Court).delete()
+        db.session.query(Category).delete()
+        db.session.query(Tournament).delete()
+        db.session.query(User).delete()
+        db.session.commit()
+        print("Old data deleted.")
 
+        # ==========================
+        # 1. User (Admin, Committee, Referee)
+        # ==========================
+        admin = User(
+            name="Admin Sistem",
+            email="admin@sporthive.com",
+            password=bcrypt.generate_password_hash("admin123").decode('utf-8'),
+            role="ADMIN"
+        )
+        referee = User(
+            name="Referee A",
+            email="referee@sporthive.com",
+            password=bcrypt.generate_password_hash("ref123").decode('utf-8'),
+            role="REFEREE"
+        )
+        committee = User(
+            name="Committee A",
+            email="committee@sporthive.com",
+            password=bcrypt.generate_password_hash("com123").decode('utf-8'),
+            role="COMMITTEE"
+        )
+        db.session.add_all([admin, referee, committee])
+        db.session.commit() # Commit to get IDs
 
-def main():
-    db.connect()
+        # ==========================
+        # 2. Tournament
+        # ==========================
+        tournament = Tournament(
+            name="SportHive Badminton Championship",
+            location="Jakarta Nation Hall",
+            start_date=datetime(2025, 2, 10),
+            end_date=datetime(2025, 2, 12),
+            description="Turnamen resmi SportHive level nasional.",
+            created_by_id=admin.id
+        )
+        db.session.add(tournament)
+        db.session.commit()
 
-    # ==========================
-    # 1. User (Admin, Committee, Referee)
-    # ==========================
-    admin = db.user.create(
-        data={
-            "name": "Admin Sistem",
-            "email": "admin@sporthive.com",
-            "password": "admin123",
-            "role": "ADMIN",
-        }
-    )
+        # ==========================
+        # 3. Category
+        # ==========================
+        category_u17_boys = Category(
+            name="U17 Boys Intermediate",
+            gender="MALE",
+            level="INTERMEDIATE",
+            min_age=13,
+            max_age=17,
+            tournament_id=tournament.id
+        )
+        category_u17_girls = Category(
+            name="U17 Girls Intermediate",
+            gender="FEMALE",
+            level="INTERMEDIATE",
+            min_age=13,
+            max_age=17,
+            tournament_id=tournament.id
+        )
+        db.session.add_all([category_u17_boys, category_u17_girls])
+        db.session.commit()
 
-    referee = db.user.create(
-        data={
-            "name": "Referee A",
-            "email": "referee@sporthive.com",
-            "password": "ref123",
-            "role": "REFEREE",
-        }
-    )
+        # ==========================
+        # 4. Participants
+        # ==========================
+        p1 = Participant(
+            full_name="Joko Widodo",
+            birth_date=datetime(2009, 7, 1),
+            gender="MALE",
+            email="jokowi@eradigital.com",
+            phone="08123456789",
+            tournament_id=tournament.id,
+            category_id=category_u17_boys.id
+        )
+        p2 = Participant(
+            full_name="Roy Suryo",
+            birth_date=datetime(2008, 12, 20),
+            gender="MALE",
+            email="haters@owi.com",
+            phone="0899123456",
+            tournament_id=tournament.id,
+            category_id=category_u17_boys.id
+        )
+        p3 = Participant(
+            full_name="Megawati Soekarnopoetri",
+            birth_date=datetime(2009, 5, 10),
+            gender="FEMALE",
+            email="megachan@pdip.com",
+            phone="0877777777",
+            tournament_id=tournament.id,
+            category_id=category_u17_girls.id
+        )
+        db.session.add_all([p1, p2, p3])
+        db.session.commit()
 
-    committee = db.user.create(
-        data={
-            "name": "Committee A",
-            "email": "committee@sporthive.com",
-            "password": "com123",
-            "role": "COMMITTEE",
-        }
-    )
+        # ==========================
+        # 5. Teams (Single = 1 player per team)
+        # ==========================
+        team1 = Team(
+            name="Team Owi",
+            tournament_id=tournament.id,
+            category_id=category_u17_boys.id
+        )
+        team2 = Team(
+            name="Team Suryo",
+            tournament_id=tournament.id,
+            category_id=category_u17_boys.id
+        )
+        team3 = Team(
+            name="Team Mega",
+            tournament_id=tournament.id,
+            category_id=category_u17_girls.id
+        )
+        db.session.add_all([team1, team2, team3])
+        db.session.commit()
 
-    # ==========================
-    # 2. Tournament
-    # ==========================
-    tournament = db.tournament.create(
-        data={
-            "name": "SportHive Badminton Championship",
-            "location": "Jakarta Nation Hall",
-            "startDate": datetime(2025, 2, 10),
-            "endDate": datetime(2025, 2, 12),
-            "description": "Turnamen resmi SportHive level nasional.",
-            "createdById": admin.id,
-        }
-    )
+        # Link players to teams
+        tp1 = TeamParticipant(team_id=team1.id, participant_id=p1.id)
+        tp2 = TeamParticipant(team_id=team2.id, participant_id=p2.id)
+        tp3 = TeamParticipant(team_id=team3.id, participant_id=p3.id)
+        db.session.add_all([tp1, tp2, tp3])
+        db.session.commit()
 
-    # ==========================
-    # 3. Category
-    # ==========================
-    category_u17_boys = db.category.create(
-        data={
-            "name": "U17 Boys Intermediate",
-            "gender": "MALE",
-            "level": "INTERMEDIATE",
-            "minAge": 13,
-            "maxAge": 17,
-            "tournamentId": tournament.id,
-        }
-    )
+        # ==========================
+        # 6. Courts
+        # ==========================
+        court1 = Court(name="Court 1", location_note="Main Hall A", tournament_id=tournament.id)
+        court2 = Court(name="Court 2", location_note="Main Hall B", tournament_id=tournament.id)
+        db.session.add_all([court1, court2])
+        db.session.commit()
 
-    category_u17_girls = db.category.create(
-        data={
-            "name": "U17 Girls Intermediate",
-            "gender": "FEMALE",
-            "level": "INTERMEDIATE",
-            "minAge": 13,
-            "maxAge": 17,
-            "tournamentId": tournament.id,
-        }
-    )
+        # ==========================
+        # 7. Match (contoh 1 match)
+        # ==========================
+        match1 = Match(
+            round=1,
+            group_code="A",
+            scheduled_at=datetime(2025, 2, 10, 9, 0),
+            status="SCHEDULED",
+            tournament_id=tournament.id,
+            category_id=category_u17_boys.id,
+            home_team_id=team1.id,
+            away_team_id=team2.id,
+            court_id=court1.id,
+            referee_id=referee.id
+        )
+        db.session.add(match1)
+        db.session.commit()
 
-    # ==========================
-    # 4. Participants
-    # ==========================
-    p1 = db.participant.create(
-        data={
-            "fullName": "Joko Widodo",
-            "birthDate": datetime(2009, 7, 1),
-            "gender": "MALE",
-            "email": "jokowi@eradigital.com",
-            "phone": "08123456789",
-            "tournamentId": tournament.id,
-            "categoryId": category_u17_boys.id,
-        }
-    )
-
-    p2 = db.participant.create(
-        data={
-            "fullName": "Roy Suryo",
-            "birthDate": datetime(2008, 12, 20),
-            "gender": "MALE",
-            "email": "haters@owi.com",
-            "phone": "0899123456",
-            "tournamentId": tournament.id,
-            "categoryId": category_u17_boys.id,
-        }
-    )
-
-    p3 = db.participant.create(
-        data={
-            "fullName": "Megawati Soekarnopoetri",
-            "birthDate": datetime(2009, 5, 10),
-            "gender": "FEMALE",
-            "email": "megachan@pdip.com",
-            "phone": "0877777777",
-            "tournamentId": tournament.id,
-            "categoryId": category_u17_girls.id,
-        }
-    )
-
-    # ==========================
-    # 5. Teams (Single = 1 player per team)
-    # ==========================
-    team1 = db.team.create(
-        data={
-            "name": "Team Owi",
-            "tournamentId": tournament.id,
-            "categoryId": category_u17_boys.id,
-            "players": {
-                "create": [{"participantId": p1.id}],
-            },
-        }
-    )
-
-    team2 = db.team.create(
-        data={
-            "name": "Team Suryo",
-            "tournamentId": tournament.id,
-            "categoryId": category_u17_boys.id,
-            "players": {
-                "create": [{"participantId": p2.id}],
-            },
-        }
-    )
-
-    team3 = db.team.create(
-        data={
-            "name": "Team Mega",
-            "tournamentId": tournament.id,
-            "categoryId": category_u17_girls.id,
-            "players": {
-                "create": [{"participantId": p3.id}],
-            },
-        }
-    )
-
-    # ==========================
-    # 6. Courts
-    # ==========================
-    court1 = db.court.create(
-        data={
-            "name": "Court 1",
-            "locationNote": "Main Hall A",
-            "tournamentId": tournament.id,
-        }
-    )
-
-    court2 = db.court.create(
-        data={
-            "name": "Court 2",
-            "locationNote": "Main Hall B",
-            "tournamentId": tournament.id,
-        }
-    )
-
-    # ==========================
-    # 7. Match (contoh 1 match)
-    # ==========================
-    match1 = db.match.create(
-        data={
-            "round": 1,
-            "groupCode": "A",
-            "scheduledAt": datetime(2025, 2, 10, 9, 0),
-            "status": "SCHEDULED",
-            "tournamentId": tournament.id,
-            "categoryId": category_u17_boys.id,
-            "homeTeamId": team1.id,
-            "awayTeamId": team2.id,
-            "courtId": court1.id,
-            "refereeId": referee.id,
-        }
-    )
-
-    print("Seed data berhasil dimasukkan!")
-
-    db.disconnect()
-
+        print("Seed data berhasil dimasukkan!")
 
 if __name__ == "__main__":
-    main()
+    seed_data()

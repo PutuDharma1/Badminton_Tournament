@@ -1,73 +1,55 @@
-# Server/routes/standings.py
-from flask import Blueprint, jsonify
-from prisma.models import Team, Match
-from collections import defaultdict
+from flask import Blueprint, jsonify, request
+from extensions import db
+from models import Team, Match
 
-standings_blueprint = Blueprint('standings', __name__)
+standings_blueprint = Blueprint('standings', __name__, url_prefix='/api/standings')
 
-@standings_blueprint.route('/category/<int:category_id>', methods=['GET'])
-def get_standings(category_id):
-    """
-    Menghitung klasemen (standings) untuk kategori round robin.
-    Ini adalah implementasi sederhana (hanya menghitung menang/kalah).
-    """
+@standings_blueprint.route('/', methods=['GET'])
+def get_standings():
+    tournament_id = request.args.get('tournamentId')
+    category_id = request.args.get('categoryId')
     
-    # 1. Dapatkan semua tim di kategori ini
-    teams = Team.prisma().find_many(
-        where={'categoryId': category_id}
-    )
-    
-    # 2. Dapatkan semua pertandingan yang sudah selesai
-    finished_matches = Match.prisma().find_many(
-        where={
-            'categoryId': category_id,
-            'status': 'FINISHED'
-        },
-        include={'winnerTeam': True}
-    )
+    if not tournament_id or not category_id:
+        return jsonify({"error": "TournamentId and CategoryId required"}), 400
 
-    # 3. Inisialisasi papan skor
-    #    defaultdict(lambda: ...) membuat entri baru jika key belum ada
-    standings = defaultdict(lambda: {
-        'played': 0,
-        'won': 0,
-        'lost': 0,
-        'points_for': 0,
-        'points_against': 0,
-        'point_diff': 0
-    })
-
-    # 4. Hitung skor
-    for match in finished_matches:
-        # Tambah data untuk tim tuan rumah
-        standings[match.homeTeamId]['played'] += 1
-        standings[match.homeTeamId]['points_for'] += match.homeScore
-        standings[match.homeTeamId]['points_against'] += match.awayScore
+    try:
+        teams = Team.query.filter_by(tournament_id=tournament_id, category_id=category_id).all()
+        matches = Match.query.filter_by(
+            tournament_id=tournament_id, 
+            category_id=category_id, 
+            status='FINISHED'
+        ).all()
         
-        # Tambah data untuk tim tamu
-        standings[match.awayTeamId]['played'] += 1
-        standings[match.awayTeamId]['points_for'] += match.awayScore
-        standings[match.awayTeamId]['points_against'] += match.homeScore
+        standings = {}
+        for team in teams:
+            standings[team.id] = {
+                "teamId": team.id,
+                "teamName": team.name,
+                "played": 0,
+                "won": 0,
+                "lost": 0,
+                "points": 0
+            }
+            
+        for m in matches:
+            if m.winner_team_id:
+                # Winner
+                if m.winner_team_id in standings:
+                    standings[m.winner_team_id]["played"] += 1
+                    standings[m.winner_team_id]["won"] += 1
+                    standings[m.winner_team_id]["points"] += 3
+                
+                # Loser (The other team)
+                loser_id = m.away_team_id if m.winner_team_id == m.home_team_id else m.home_team_id
+                if loser_id in standings:
+                    standings[loser_id]["played"] += 1
+                    standings[loser_id]["lost"] += 1
+                    # standings[loser_id]["points"] += 0
 
-        # Tambah kemenangan/kekalahan
-        if match.winnerTeamId == match.homeTeamId:
-            standings[match.homeTeamId]['won'] += 1
-            standings[match.awayTeamId]['lost'] += 1
-        else:
-            standings[match.homeTeamId]['lost'] += 1
-            standings[match.awayTeamId]['won'] += 1
-
-    # 5. Format hasil
-    result = []
-    team_map = {team.id: team.name for team in teams}
-    
-    for team_id, stats in standings.items():
-        stats['team_id'] = team_id
-        stats['team_name'] = team_map.get(team_id, 'Unknown Team')
-        stats['point_diff'] = stats['points_for'] - stats['points_against']
-        result.append(stats)
+        # Sort by points
+        sorted_standings = sorted(standings.values(), key=lambda x: x['points'], reverse=True)
         
-    # 6. Urutkan klasemen (berdasarkan kemenangan, lalu selisih poin)
-    result.sort(key=lambda x: (x['won'], x['point_diff']), reverse=True)
+        return jsonify(sorted_standings), 200
 
-    return jsonify({"data": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

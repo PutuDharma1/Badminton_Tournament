@@ -1,0 +1,51 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+
+# Byte-compiled / optimized / DLL files
+*.pyd
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+.env
+.venv/
+
+# Environment files
+*.env
+.env.local
+.env.*.local
+
+# Flask instance folder
+instance/
+*.db
+
+# macOS files
+.DS_Store
+
+# VSCode settings
+.vscode/
+
+# Logs
+*.log
+
+# Cache
+*.cache/
+cache/
+pip-wheel-metadata/
+
+# Node (if your Flask app also has frontend)
+node_modules/
+
+# Compiled HTML templates (if any)
+*.html.py
+
+# --- Project-specific ignores ---
+routes/__pycache__/
+services/__pycache__/

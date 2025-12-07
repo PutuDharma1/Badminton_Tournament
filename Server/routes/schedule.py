@@ -1,58 +1,80 @@
-# Server/routes/schedule.py
 from flask import Blueprint, jsonify, request
-from prisma.models import Category, Team, Match
+from flask import Blueprint, jsonify, request
+from extensions import db
+from models import Match, Team, Court
+from datetime import datetime, timedelta
 
-schedule_blueprint = Blueprint('schedule', __name__)
+schedule_blueprint = Blueprint('schedule', __name__, url_prefix='/api/schedule')
+
+def generate_round_robin_matches(tournament_id, category_id=None):
+    # Logic extracted for reuse
+    # If category_id is None, maybe generate for all categories in tournament?
+    # For now, let's assume if category_id is None, we fetch all categories or just fail?
+    # The original code required category_id. 
+    # Let's support fetching all categories if not provided.
+    
+    matches_created = []
+    
+    query = Team.query.filter_by(tournament_id=tournament_id)
+    if category_id:
+        query = query.filter_by(category_id=category_id)
+    
+    teams = query.all()
+    
+    # Group teams by category if we are doing bulk generation
+    teams_by_category = {}
+    for team in teams:
+        cat_id = team.category_id or 0 # 0 for unassigned
+        if cat_id not in teams_by_category:
+            teams_by_category[cat_id] = []
+        teams_by_category[cat_id].append(team)
+
+    start_time = datetime(2025, 2, 10, 9, 0, 0)
+    court_id = 1
+    
+    for cat_id, cat_teams in teams_by_category.items():
+        if len(cat_teams) < 2:
+            continue
+            
+        n = len(cat_teams)
+        for i in range(n):
+            for j in range(i + 1, n):
+                match = Match(
+                    round=1,
+                    group_code="A",
+                    scheduled_at=start_time,
+                    status="SCHEDULED",
+                    tournament_id=tournament_id,
+                    category_id=cat_id if cat_id != 0 else None,
+                    home_team_id=cat_teams[i].id,
+                    away_team_id=cat_teams[j].id,
+                    court_id=court_id
+                )
+                matches_created.append(match)
+                start_time += timedelta(hours=1)
+                
+    if matches_created:
+        db.session.add_all(matches_created)
+        db.session.commit()
+        
+    return matches_created
 
 @schedule_blueprint.route('/generate', methods=['POST'])
 def generate_schedule():
-    """
-    Memicu pembuatan jadwal untuk sebuah kategori.
-    Ini adalah placeholder, logika penjadwalan (round robin/knockout)
-    perlu diimplementasikan secara detail.
-    """
-    data = request.json
+    data = request.get_json()
+    tournament_id = data.get('tournamentId')
     category_id = data.get('categoryId')
     
-    if not category_id:
-        return jsonify({"error": "categoryId diperlukan"}), 400
+    if not tournament_id:
+        return jsonify({"error": "TournamentId required"}), 400
 
-    # 1. Hapus jadwal lama (jika ada)
-    Match.prisma().delete_many(where={'categoryId': category_id})
+    try:
+        matches = generate_round_robin_matches(tournament_id, category_id)
+        return jsonify({
+            "message": f"Generated {len(matches)} matches successfully.",
+            "match_count": len(matches)
+        }), 201
 
-    # 2. Dapatkan semua tim/peserta dalam kategori ini
-    #    Untuk contoh ini, kita asumsikan Kategori ini menggunakan 'Team'
-    teams = Team.prisma().find_many(where={'categoryId': category_id})
-    
-    if len(teams) < 2:
-        return jsonify({"error": "Butuh minimal 2 tim untuk membuat jadwal"}), 400
-
-    # 3. Terapkan Algoritma Penjadwalan
-    #    CONTOH: Logika Round Robin Sederhana
-    #    Ini adalah implementasi naif, HANYA UNTUK ILUSTRASI
-    
-    matches_to_create = []
-    round_num = 1
-    
-    # Buat daftar pasangan unik
-    for i in range(len(teams)):
-        for j in range(i + 1, len(teams)):
-            home_team = teams[i]
-            away_team = teams[j]
-            
-            matches_to_create.append({
-                'round': round_num,
-                'status': 'SCHEDULED',
-                'tournamentId': home_team.tournamentId,
-                'categoryId': category_id,
-                'homeTeamId': home_team.id,
-                'awayTeamId': away_team.id,
-            })
-            # Di aplikasi nyata, Anda juga harus mengelola courtId dan scheduledAt
-            round_num += 1
-
-    # 4. Simpan pertandingan baru ke DB
-    if matches_to_create:
-        Match.prisma().create_many(data=matches_to_create)
-
-    return jsonify({"message": f"Sukses membuat {len(matches_to_create)} pertandingan"}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500

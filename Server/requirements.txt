@@ -1,0 +1,10 @@
+flask
+flask-cors
+flask-sqlalchemy
+flask-migrate
+psycopg2-binary
+email_validator
+flask-bcrypt
+flask-jwt-extended
+python-dotenv
+Faker
