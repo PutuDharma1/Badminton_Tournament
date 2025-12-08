@@ -30,7 +30,9 @@ def generate_round_robin_matches(tournament_id, category_id=None):
         teams_by_category[cat_id].append(team)
 
     start_time = datetime(2025, 2, 10, 9, 0, 0)
-    court_id = 1
+    
+    # Fetch courts for this tournament
+    courts = Court.query.filter_by(tournament_id=tournament_id).all()
     
     for cat_id, cat_teams in teams_by_category.items():
         if len(cat_teams) < 2:
@@ -39,6 +41,12 @@ def generate_round_robin_matches(tournament_id, category_id=None):
         n = len(cat_teams)
         for i in range(n):
             for j in range(i + 1, n):
+                # Round Robin logic - simplified for demo
+                # Assign court cyclically if available
+                assigned_court_id = None
+                if courts:
+                    assigned_court_id = courts[(i + j) % len(courts)].id
+                
                 match = Match(
                     round=1,
                     group_code="A",
@@ -48,7 +56,7 @@ def generate_round_robin_matches(tournament_id, category_id=None):
                     category_id=cat_id if cat_id != 0 else None,
                     home_team_id=cat_teams[i].id,
                     away_team_id=cat_teams[j].id,
-                    court_id=court_id
+                    court_id=assigned_court_id
                 )
                 matches_created.append(match)
                 start_time += timedelta(hours=1)
