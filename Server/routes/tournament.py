@@ -6,7 +6,7 @@ from routes.schedule import generate_round_robin_matches
 
 tournament_blueprint = Blueprint('tournament', __name__, url_prefix='/api/tournaments')
 
-@tournament_blueprint.route('/', methods=['GET'])
+@tournament_blueprint.route('/', methods=['GET'], strict_slashes=False)
 def get_tournaments():
     try:
         tournaments = Tournament.query.all()
@@ -24,7 +24,7 @@ def get_tournament(id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@tournament_blueprint.route('/', methods=['POST'])
+@tournament_blueprint.route('/', methods=['POST'], strict_slashes=False)
 def create_tournament():
     data = request.get_json()
     

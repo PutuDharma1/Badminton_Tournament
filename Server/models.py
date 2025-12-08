@@ -23,9 +23,11 @@ class Tournament(db.Model):
     description = db.Column(db.Text, nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=db.func.now())
+    status = db.Column(db.String(50), default='DRAFT') # DRAFT, ONGOING, FINISHED
 
     categories = db.relationship('Category', backref='tournament', lazy=True)
     matches = db.relationship('Match', backref='tournament', lazy=True)
+    participants = db.relationship('Participant', backref='tournament', lazy=True)
 
     def to_dict(self):
         return {
@@ -35,7 +37,15 @@ class Tournament(db.Model):
             'startDate': self.start_date.isoformat() if self.start_date else None,
             'endDate': self.end_date.isoformat() if self.end_date else None,
             'description': self.description,
-            'createdById': self.created_by_id
+            'createdById': self.created_by_id,
+            'status': self.status,
+            'categories': [c.to_dict() for c in self.categories],
+            'participants': [p.to_dict() for p in self.participants], # Uses the backref 'participants' which needs to be defined in Participant model or via backref in Category?
+            # Wait, Participant has tournament_id. Let's check the relationship reversed.
+            # In Participant model: tournament = db.relationship('Tournament', backref='participants') is NOT defined explicitly in the snippets I saw.
+            # In models.py view, Participant has NO relationship back to Tournament explicitly defined, but Tournament has NO relationship defined for participants?
+            # Wait, let me check models.py again.
+            'matches': [m.to_dict() for m in self.matches]
         }
 
 class Category(db.Model):
@@ -73,6 +83,9 @@ class Participant(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     tournament_id = db.Column(db.Integer, db.ForeignKey('Tournament.id'), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('Category.id'), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
+    
+    user = db.relationship('User', backref='participants', lazy=True)
 
     def to_dict(self):
         return {
@@ -84,7 +97,9 @@ class Participant(db.Model):
             "phone": self.phone,
             "isActive": self.is_active,
             "tournamentId": self.tournament_id,
-            "categoryId": self.category_id
+            "categoryId": self.category_id,
+            "userId": self.user_id,
+            "user": {"name": self.user.name, "email": self.user.email} if self.user else None
         }
 
 class Team(db.Model):
@@ -150,8 +165,10 @@ class Match(db.Model):
     home_team = db.relationship('Team', foreign_keys=[home_team_id], backref='home_matches')
     away_team = db.relationship('Team', foreign_keys=[away_team_id], backref='away_matches')
     winner_team = db.relationship('Team', foreign_keys=[winner_team_id], backref='won_matches')
+    winner_team = db.relationship('Team', foreign_keys=[winner_team_id], backref='won_matches')
     court = db.relationship('Court', backref='matches')
     referee = db.relationship('User', backref='officiated_matches')
+    category = db.relationship('Category', backref='matches')
 
     def to_dict(self):
         return {
