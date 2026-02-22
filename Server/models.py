@@ -150,7 +150,9 @@ class Match(db.Model):
     scheduled_at = db.Column(db.DateTime, nullable=True)
     started_at = db.Column(db.DateTime) 
     finished_at = db.Column(db.DateTime, nullable=True)
-    status = db.Column(db.String(50), default='SCHEDULED') # SCHEDULED, ONGOING, FINISHED
+    status = db.Column(db.String(50), default='SCHEDULED') 
+    
+    # home_score dan away_score di sini sekarang merepresentasikan "GAMES/SET WON" (misal: 2-1, 2-0)
     home_score = db.Column(db.Integer, default=0)
     away_score = db.Column(db.Integer, default=0)
 
@@ -162,10 +164,12 @@ class Match(db.Model):
     winner_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=True)
     referee_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
     
+    # Tambahkan relasi ini untuk mengambil detail skor per set
+    sets = db.relationship('MatchSet', backref='match', lazy=True, cascade="all, delete-orphan")
+
     home_team = db.relationship('Team', foreign_keys=[home_team_id], backref='home_matches')
     away_team = db.relationship('Team', foreign_keys=[away_team_id], backref='away_matches')
-    winner_team = db.relationship('Team', foreign_keys=[winner_team_id], backref='won_matches')
-    winner_team = db.relationship('Team', foreign_keys=[winner_team_id], backref='won_matches')
+    winner_team = db.relationship('Team', foreign_keys=[winner_team_id], backref='won_matches', overlaps="won_matches")
     court = db.relationship('Court', backref='matches')
     referee = db.relationship('User', backref='officiated_matches')
     category = db.relationship('Category', backref='matches')
@@ -177,14 +181,31 @@ class Match(db.Model):
             "groupCode": self.group_code,
             "scheduledAt": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "status": self.status,
-            "homeScore": self.home_score,
-            "awayScore": self.away_score,
+            "homeScore": self.home_score, # Games won
+            "awayScore": self.away_score, # Games won
+            "sets": [s.to_dict() for s in self.sets], # <- Tambahkan ini
             "categoryId": self.category_id,
             "courtId": self.court_id,
             "category": {"name": self.category.name} if self.category else None,
             "court": {"name": self.court.name} if self.court else None,
-            # Handle potential None for teams if verification data is partial
             "homeTeam": {"name": self.home_team.name} if self.home_team else None,
             "awayTeam": {"name": self.away_team.name} if self.away_team else None,
             "winnerTeamId": self.winner_team_id
+        }
+    
+class MatchSet(db.Model):
+    __tablename__ = 'MatchSet'
+    id = db.Column(db.Integer, primary_key=True)
+    match_id = db.Column(db.Integer, db.ForeignKey('Match.id'), nullable=False)
+    set_number = db.Column(db.Integer, nullable=False)  # 1, 2, atau 3
+    home_score = db.Column(db.Integer, default=0)       # Poin tim home di set ini
+    away_score = db.Column(db.Integer, default=0)       # Poin tim away di set ini
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "matchId": self.match_id,
+            "setNumber": self.set_number,
+            "homeScore": self.home_score,
+            "awayScore": self.away_score
         }
