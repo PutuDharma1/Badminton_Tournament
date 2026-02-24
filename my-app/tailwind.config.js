@@ -4,6 +4,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}", // Pastikan ini mencakup semua file React Anda
   ],
+  darkMode: 'class',
   theme: {
     extend: {},
   },

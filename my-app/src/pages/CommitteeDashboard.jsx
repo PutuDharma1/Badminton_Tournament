@@ -85,9 +85,15 @@ function CommitteeDashboard() {
             <div className="stat-grid">
                 <div className="stat-card">
                     <div className="stat-header">
-                        <span className="stat-label">Total Tournaments</span>
+                        <span className="stat-label">Ongoing</span>
+                        <span 
+                            className="stat-chip text-amber-700 dark:text-[#fde047]" 
+                            style={{ borderColor: '#f59e0b' }}
+                        >
+                            Active
+                        </span>
                     </div>
-                    <div className="stat-value">{stats.total}</div>
+                    <div className="stat-value">{stats.ongoing}</div>
                 </div>
 
                 <div className="stat-card">
@@ -173,22 +179,24 @@ function TournamentCard({ tournament, onView, onDelete }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>{tournament.name}</h3>
                 <span
+                    className="text-slate-700 dark:text-white" /* <-- Tambahkan class Tailwind ini */
                     style={{
                         fontSize: 11,
                         padding: '3px 8px',
                         borderRadius: 999,
                         background: status.bg,
                         border: `1px solid ${status.border}`,
-                        color: status.text,
+                        /* Hapus baris color: status.text, */
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em',
+                        fontWeight: '600'
                     }}
                 >
                     {tournament.status}
                 </span>
             </div>
 
-            <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 12 }}>
+            <div className="text-slate-600 dark:text-gray-400" style={{ fontSize: 13, marginBottom: 12 }}>
                 <p style={{ margin: '4px 0' }}>📍 {tournament.location}</p>
                 <p style={{ margin: '4px 0' }}>📅 {new Date(tournament.startDate).toLocaleDateString()}</p>
                 <p style={{ margin: '4px 0' }}>👥 {tournament.participantCount || 0} participants</p>

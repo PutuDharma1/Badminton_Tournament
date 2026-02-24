@@ -2,7 +2,7 @@ import apiClient from './client';
 import { mockParticipants, mockUsers, findUserById } from './mockData';
 
 // Check if we should use mock data
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'false';
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
 // Simulate network delay
 const mockDelay = (ms = 400) => new Promise(resolve => setTimeout(resolve, ms));
