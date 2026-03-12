@@ -122,24 +122,24 @@ function Register() {
                 {error && (
                     <div style={{
                         padding: '12px',
-                        backgroundColor: '#fef2f2',
-                        border: '1px solid #fecaca',
+                        backgroundColor: 'var(--danger-bg)',
+                        border: '1px solid var(--danger-border)',
                         borderRadius: '6px',
                         marginBottom: '16px'
                     }}>
-                        <p style={{ color: '#dc2626', fontSize: '14px', margin: 0 }}>{error}</p>
+                        <p style={{ color: 'var(--danger-text)', fontSize: '14px', margin: 0 }}>{error}</p>
                     </div>
                 )}
 
                 {success && (
                     <div style={{
                         padding: '12px',
-                        backgroundColor: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
+                        backgroundColor: 'var(--status-finished-bg)',
+                        border: '1px solid var(--status-finished-border)',
                         borderRadius: '6px',
                         marginBottom: '16px'
                     }}>
-                        <p style={{ color: '#16a34a', fontSize: '14px', margin: 0 }}>{success}</p>
+                        <p style={{ color: 'var(--status-finished-text)', fontSize: '14px', margin: 0 }}>{success}</p>
                     </div>
                 )}
 
@@ -215,12 +215,12 @@ function Register() {
                     {isPlayer && (
                         <>
                             <div style={{
-                                borderTop: '1px solid #e5e7eb',
+                                borderTop: '1px solid var(--border)',
                                 paddingTop: '16px',
                                 marginTop: '16px',
                                 marginBottom: '16px'
                             }}>
-                                <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '12px', fontWeight: 500 }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '12px', fontWeight: 500 }}>
                                     Player Information
                                 </p>
                             </div>
@@ -278,9 +278,9 @@ function Register() {
                 </form>
 
                 <div style={{ marginTop: '24px', textAlign: 'center' }}>
-                    <p style={{ color: '#9ca3af', fontSize: '14px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
                         Already have an account?{' '}
-                        <Link to="/login" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 500 }}>
+                        <Link to="/login" style={{ color: 'var(--text-link)', textDecoration: 'none', fontWeight: 500 }}>
                             Sign in
                         </Link>
                     </p>

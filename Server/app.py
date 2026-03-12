@@ -17,6 +17,7 @@ from routes.match import match_blueprint
 from routes.schedule import schedule_blueprint
 from routes.standings import standings_blueprint
 from routes.tournament import tournament_blueprint
+from routes.court import court_blueprint
 
 app = Flask(__name__)
 CORS(app)
@@ -41,6 +42,7 @@ app.register_blueprint(match_blueprint)
 app.register_blueprint(schedule_blueprint)
 app.register_blueprint(standings_blueprint)
 app.register_blueprint(tournament_blueprint)
+app.register_blueprint(court_blueprint)
 
 @app.route('/')
 def hello_world():

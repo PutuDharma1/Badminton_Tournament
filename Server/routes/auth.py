@@ -32,6 +32,17 @@ def register():
             password=hashed_password,
             role=role
         )
+
+        # Save player-specific fields if role is PLAYER
+        if role == 'PLAYER':
+            from datetime import datetime
+            if data.get('birthDate'):
+                new_user.birth_date = datetime.fromisoformat(data['birthDate'].replace('Z', '+00:00'))
+            if data.get('gender'):
+                new_user.gender = data['gender']
+            if data.get('phone'):
+                new_user.phone = data['phone']
+
         db.session.add(new_user)
         db.session.commit()
         

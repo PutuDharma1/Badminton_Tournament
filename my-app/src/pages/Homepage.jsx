@@ -98,7 +98,7 @@ export default function Homepage() {
       )}
 
       {/* Filter Tabs */}
-      <div style={{ borderBottom: '1px solid #334155', marginBottom: 24 }}>
+      <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           {['all', 'draft', 'ongoing', 'finished'].map(f => (
             <button
@@ -108,8 +108,8 @@ export default function Homepage() {
                 background: 'none',
                 border: 'none',
                 padding: '12px 0',
-                color: filter === f ? '#60a5fa' : '#9ca3af',
-                borderBottom: filter === f ? '2px solid #60a5fa' : 'none',
+                color: filter === f ? 'var(--text-link)' : 'var(--text-muted)',
+                borderBottom: filter === f ? '2px solid var(--text-link)' : 'none',
                 cursor: 'pointer',
                 fontSize: 14,
                 fontWeight: 500,
@@ -125,7 +125,7 @@ export default function Homepage() {
       {/* Tournaments Grid */}
       {filteredTournaments.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-          <p style={{ color: '#9ca3af', marginBottom: 16 }}>
+          <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
             {filter === 'all' ? 'No tournaments available' : `No ${filter} tournaments`}
           </p>
           {!isAuthenticated && (
@@ -157,9 +157,9 @@ export default function Homepage() {
 // Tournament Card Component
 function TournamentCard({ tournament, onClick, isAuthenticated }) {
   const statusColors = {
-    DRAFT: { bg: 'rgba(59, 130, 246, 0.12)', border: '#60a5fa', text: '#bfdbfe' },
-    ONGOING: { bg: 'rgba(245, 158, 11, 0.12)', border: '#f59e0b', text: '#fde047' },
-    FINISHED: { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#bbf7d0' },
+    DRAFT: { bg: 'var(--status-scheduled-bg)', border: 'var(--status-scheduled-border)', text: 'var(--status-scheduled-text)' },
+    ONGOING: { bg: 'var(--status-ongoing-bg)', border: 'var(--status-ongoing-border)', text: 'var(--status-ongoing-text)' },
+    FINISHED: { bg: 'var(--status-finished-bg)', border: 'var(--status-finished-border)', text: 'var(--status-finished-text)' },
   };
 
   const status = statusColors[tournament.status] || statusColors.DRAFT;
@@ -175,11 +175,11 @@ function TournamentCard({ tournament, onClick, isAuthenticated }) {
       onClick={onClick}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-4px)';
-        e.currentTarget.style.boxShadow = '0 20px 50px rgba(15, 23, 42, 0.95)';
+        e.currentTarget.style.boxShadow = '0 16px 40px rgba(0,0,0,0.15)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 18px 45px rgba(15, 23, 42, 0.9)';
+        e.currentTarget.style.boxShadow = '';
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
@@ -201,14 +201,14 @@ function TournamentCard({ tournament, onClick, isAuthenticated }) {
         </span>
       </div>
 
-      <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 12 }}>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
         <p style={{ margin: '4px 0' }}>📍 {tournament.location}</p>
         <p style={{ margin: '4px 0' }}>📅 {new Date(tournament.startDate).toLocaleDateString()}</p>
         <p style={{ margin: '4px 0' }}>👥 {tournament.participantCount || 0} participants</p>
       </div>
 
       {tournament.description && (
-        <p style={{ fontSize: 13, color: '#cbd5e1', marginTop: 8, lineHeight: 1.4 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.4 }}>
           {tournament.description.substring(0, 80)}{tournament.description.length > 80 ? '...' : ''}
         </p>
       )}

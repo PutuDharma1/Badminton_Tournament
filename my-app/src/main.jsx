@@ -14,6 +14,7 @@ import Wasit from './pages/Wasit.jsx'
 import Settings from './pages/Settings.jsx'
 import Homepage from './pages/Homepage.jsx'
 import TournamentPage from './pages/Tournament.jsx'
+import PlayerDashboard from './pages/PlayerDashboard.jsx'
 
 // Layout
 import MainLayout from './layouts/MainLayout.jsx'
@@ -47,6 +48,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute roles={['COMMITTEE']}>
             <CommitteeDashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/player",
+        element: (
+          <ProtectedRoute roles={['PLAYER']}>
+            <PlayerDashboard />
           </ProtectedRoute>
         ),
       },

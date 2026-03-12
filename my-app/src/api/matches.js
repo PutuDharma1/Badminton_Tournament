@@ -1,134 +1,45 @@
 import apiClient from './client';
-import { mockMatches, mockParticipants, findUserById } from './mockData';
 
-// Check if we should use mock data
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
-
-// Simulate network delay
-const mockDelay = (ms = 400) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Matches API calls
+// Matches API — calls the real Flask backend
 export const matchesApi = {
-    // Get matches for a tournament
-    async getMatches(tournamentId) {
-        if (USE_MOCK_DATA) {
-            await mockDelay();
-            const matches = mockMatches
-                .filter(m => m.tournamentId === parseInt(tournamentId))
-                .map(match => {
-                    // Populate teams/participants
-                    const homeParticipant = mockParticipants.find(p => p.id === match.homeTeamId);
-                    const awayParticipant = mockParticipants.find(p => p.id === match.awayTeamId);
+    // Get matches for a tournament, optionally filtered by round and/or stage
+    async getMatches(tournamentId, round = null, stage = null) {
+        let url = `/api/matches/?tournamentId=${tournamentId}`;
+        if (round !== null) url += `&round=${round}`;
+        if (stage) url += `&stage=${stage}`;
+        return await apiClient.get(url);
+    },
 
-                    return {
-                        ...match,
-                        homeTeam: homeParticipant ? {
-                            ...homeParticipant,
-                            user: homeParticipant.userId ? findUserById(homeParticipant.userId) : null
-                        } : null,
-                        awayTeam: awayParticipant ? {
-                            ...awayParticipant,
-                            user: awayParticipant.userId ? findUserById(homeParticipant.userId) : null
-                        } : null,
-                        referee: match.refereeId ? findUserById(match.refereeId) : null,
-                    };
-                });
-            return matches;
-        }
+    // Get a single match by ID
+    async getMatch(matchId) {
+        return await apiClient.get(`/api/matches/${matchId}`);
+    },
 
-        return await apiClient.get(`/api/matches?tournamentId=${tournamentId}`);
+    // Start a match (sets status to ONGOING, records started_at)
+    async startMatch(matchId) {
+        return await apiClient.put(`/api/matches/${matchId}/start`);
+    },
+
+    // Update match score with set-based payload
+    // sets: Array of { homeScore: number, awayScore: number }
+    // e.g. [{ homeScore: 21, awayScore: 15 }, { homeScore: 21, awayScore: 19 }]
+    async updateScore(matchId, sets) {
+        return await apiClient.put(`/api/matches/${matchId}/score`, { sets });
+    },
+
+    // Manually finish a match (committee override)
+    async finishMatch(matchId) {
+        return await apiClient.put(`/api/matches/${matchId}/finish`);
     },
 
     // Assign referee to match
     async assignReferee(matchId, refereeId) {
-        if (USE_MOCK_DATA) {
-            await mockDelay();
-
-            const match = mockMatches.find(m => m.id === parseInt(matchId));
-            if (!match) {
-                throw new Error('Match not found');
-            }
-
-            match.refereeId = refereeId;
-            return { ...match, referee: findUserById(refereeId) };
-        }
-
-        return await apiClient.put(`/matches/${matchId}/referee`, { refereeId });
+        return await apiClient.put(`/api/matches/${matchId}/referee`, { refereeId });
     },
 
-    // Update match score
-    async updateScore(matchId, homeScore, awayScore) {
-        if (USE_MOCK_DATA) {
-            await mockDelay();
-
-            const match = mockMatches.find(m => m.id === parseInt(matchId));
-            if (!match) {
-                throw new Error('Match not found');
-            }
-
-            match.homeScore = homeScore;
-            match.awayScore = awayScore;
-
-            // Auto-update status if scores are provided
-            if (homeScore !== null && awayScore !== null) {
-                if (!match.startedAt) {
-                    match.startedAt = new Date();
-                    match.status = 'ONGOING';
-                }
-            }
-
-            return match;
-        }
-
-        return await apiClient.put(`/matches/${matchId}/score`, { homeScore, awayScore });
-    },
-
-    // Finish match
-    async finishMatch(matchId) {
-        if (USE_MOCK_DATA) {
-            await mockDelay();
-
-            const match = mockMatches.find(m => m.id === parseInt(matchId));
-            if (!match) {
-                throw new Error('Match not found');
-            }
-
-            match.finishedAt = new Date();
-            match.status = 'FINISHED';
-            return match;
-        }
-
-        return await apiClient.put(`/matches/${matchId}/finish`);
-    },
-
-    // Start match
-    async startMatch(matchId) {
-        if (USE_MOCK_DATA) {
-            await mockDelay();
-
-            const match = mockMatches.find(m => m.id === parseInt(matchId));
-            if (!match) {
-                throw new Error('Match not found');
-            }
-
-            match.startedAt = new Date();
-            match.status = 'ONGOING';
-            return match;
-        }
-
-        return await apiClient.put(`/matches/${matchId}/start`);
-    },
-
-    // Get available referees
+    // Get available referees (users with REFEREE role)
     async getAvailableReferees() {
-        if (USE_MOCK_DATA) {
-            await mockDelay(200);
-            // Return all users with REFEREE role
-            const { mockUsers } = await import('./mockData');
-            return mockUsers.filter(u => u.role === 'REFEREE').map(({ password, ...user }) => user);
-        }
-
-        return await apiClient.get('/users?role=REFEREE');
+        return await apiClient.get('/api/matches/referees');
     },
 };
 

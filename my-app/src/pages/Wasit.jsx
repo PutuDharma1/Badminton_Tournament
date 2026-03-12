@@ -17,29 +17,21 @@ function Wasit() {
     try {
       setLoading(true);
       // Get all matches that need a referee or are assigned to this referee
-      // For now, let's fetch all matches and filter client-side or use a specific API endpoint
-      // Assuming we want to show matches available for pickup
-      const allMatches = await matchesApi.getMatchesByTournament(2); // Temporary: fetching from tournament 2 or we need an endpoint for "all open matches"
-      // Since we don't have "get all open matches" in mock API, let's use a workaround or update API
-      // Let's assume we want to show matches from all tournaments. 
-      // For the mock, let's just fetch from the active tournament (ID 2) for demonstration
-      // In a real app, we'd have `matchesApi.getAvailableMatches()`
-      
-      // Let's use the mock data structure directly if needed, but better to stick to API
       // We'll fetch matches from tournament 1 and 2
+
       const t1Matches = await matchesApi.getMatchesByTournament(1);
       const t2Matches = await matchesApi.getMatchesByTournament(2);
-      
+
       const all = [...t1Matches, ...t2Matches];
-      
+
       // Filter for matches that:
       // 1. Have no referee (Available)
       // 2. OR are assigned to current user (My Matches)
-      const relevantMatches = all.filter(m => 
-        (!m.refereeId && m.status !== 'FINISHED') || 
+      const relevantMatches = all.filter(m =>
+        (!m.refereeId && m.status !== 'FINISHED') ||
         (m.refereeId === user?.id)
       );
-      
+
       setMatches(relevantMatches);
     } catch (err) {
       setError('Failed to load matches');
@@ -95,10 +87,10 @@ function Wasit() {
         {availableMatches.length === 0 ? (
           <p style={{ color: '#9ca3af', fontSize: 14 }}>No matches available for pickup.</p>
         ) : (
-          <MatchTable 
-            matches={availableMatches} 
-            onPick={handlePickMatch} 
-            picking={picking} 
+          <MatchTable
+            matches={availableMatches}
+            onPick={handlePickMatch}
+            picking={picking}
           />
         )}
       </div>
@@ -123,8 +115,8 @@ function MatchTable({ matches, isMyMatch, onPick, picking }) {
           <tr key={m.id} style={{ borderBottom: "1px solid #1e293b" }}>
             <td style={{ padding: "12px 8px" }}>
               <div style={{ fontWeight: 500 }}>
-                {m.homeTeam?.user?.name || m.homeTeam?.offlineName || 'TBD'} 
-                <span style={{ color: '#64748b', margin: '0 4px' }}>vs</span> 
+                {m.homeTeam?.user?.name || m.homeTeam?.offlineName || 'TBD'}
+                <span style={{ color: '#64748b', margin: '0 4px' }}>vs</span>
                 {m.awayTeam?.user?.name || m.awayTeam?.offlineName || 'TBD'}
               </div>
               <div style={{ fontSize: 11, color: '#64748b' }}>{m.groupCode ? `Group ${m.groupCode}` : 'Round Robin'}</div>

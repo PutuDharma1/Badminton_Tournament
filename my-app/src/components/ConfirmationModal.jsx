@@ -3,8 +3,8 @@ function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confir
 
   return (
     <>
-      <div 
-        className="modal-overlay" 
+      <div
+        className="modal-overlay"
         onClick={onCancel}
         style={{
           position: 'fixed',
@@ -16,15 +16,15 @@ function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confir
           zIndex: 9998,
         }}
       />
-      <div 
+      <div
         className="modal-content"
         style={{
           position: 'fixed',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          backgroundColor: '#0f172a',
-          border: '1px solid #334155',
+          backgroundColor: 'var(--modal-bg)',
+          border: '1px solid var(--modal-border)',
           borderRadius: 16,
           padding: 24,
           width: '90%',
@@ -33,21 +33,21 @@ function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confir
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         }}
       >
-        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, color: '#f8fafc' }}>{title}</h3>
-        <p style={{ color: '#9ca3af', marginBottom: 24, lineHeight: 1.5 }}>{message}</p>
-        
+        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12, color: 'var(--text-primary)' }}>{title}</h3>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>{message}</p>
+
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-          <button 
-            className="btn-outline" 
+          <button
+            className="btn-outline"
             onClick={onCancel}
             style={{ padding: '8px 16px' }}
           >
             {cancelText}
           </button>
-          <button 
-            className="btn-primary" 
+          <button
+            className="btn-primary"
             onClick={onConfirm}
-            style={{ 
+            style={{
               padding: '8px 16px',
               backgroundColor: isDangerous ? '#ef4444' : undefined,
               borderColor: isDangerous ? '#ef4444' : undefined,

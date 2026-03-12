@@ -35,12 +35,7 @@ function Peserta() {
   const fetchPlayers = async () => {
     try {
       setLoading(true);
-      // In a real app, we would have an endpoint to get all registered players
-      // For now, let's use the search endpoint with empty query or just mock it
-      // Since mock API doesn't have "get all users", we might need to rely on what we have
-      // Let's assume we want to show all participants from all tournaments for now
-      // or just use a mock list. 
-      // Actually, let's use the searchUsers from participantsApi if it returns all on empty
+      // Fetch all users / registered players via API
       const results = await participantsApi.searchUsers('');
       setPlayers(results);
     } catch (err) {
@@ -67,11 +62,11 @@ function Peserta() {
     // We should probably use an API to create a user or participant.
     // For now, let's just show a success message as this page seems to be less critical 
     // than the Tournament specific player addition.
-    
+
     setMessage(
       `Fitur pendaftaran global belum aktif. Silakan daftar melalui menu Turnamen.`
     );
-    
+
     // Reset form
     setName("");
     setDob("");

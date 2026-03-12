@@ -37,7 +37,7 @@ function Login() {
       // Redirect based on role
       const redirectRoutes = {
         COMMITTEE: '/committee',
-        PLAYER: '/',
+        PLAYER: '/player',
         REFEREE: '/referee',
         ADMIN: '/',
       };
@@ -59,12 +59,12 @@ function Login() {
         {error && (
           <div style={{
             padding: '12px',
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fecaca',
+            backgroundColor: 'var(--danger-bg)',
+            border: '1px solid var(--danger-border)',
             borderRadius: '6px',
             marginBottom: '16px'
           }}>
-            <p style={{ color: '#dc2626', fontSize: '14px', margin: 0 }}>{error}</p>
+            <p style={{ color: 'var(--danger-text)', fontSize: '14px', margin: 0 }}>{error}</p>
           </div>
         )}
 
@@ -107,9 +107,9 @@ function Login() {
         </form>
 
         <div style={{ marginTop: '24px', textAlign: 'center' }}>
-          <p style={{ color: '#9ca3af', fontSize: '14px' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
             Don't have an account?{' '}
-            <Link to="/register" style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 500 }}>
+            <Link to="/register" style={{ color: 'var(--text-link)', textDecoration: 'none', fontWeight: 500 }}>
               Sign up
             </Link>
           </p>

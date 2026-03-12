@@ -60,7 +60,7 @@ function CommitteeDashboard() {
     }
 
     return (
-        <div className="main-content">
+        <div className="main-content-wide">
             {/* Header */}
             <div style={{ marginBottom: 24 }}>
                 <h1 className="page-title">Committee Dashboard</h1>
@@ -72,12 +72,12 @@ function CommitteeDashboard() {
             {error && (
                 <div style={{
                     padding: 12,
-                    backgroundColor: '#fef2f2',
-                    border: '1px solid #fecaca',
+                    backgroundColor: 'var(--danger-bg)',
+                    border: '1px solid var(--danger-border)',
                     borderRadius: 8,
                     marginBottom: 16
                 }}>
-                    <p style={{ color: '#dc2626', margin: 0, fontSize: 14 }}>{error}</p>
+                    <p style={{ color: 'var(--danger-text)', margin: 0, fontSize: 14 }}>{error}</p>
                 </div>
             )}
 
@@ -86,8 +86,8 @@ function CommitteeDashboard() {
                 <div className="stat-card">
                     <div className="stat-header">
                         <span className="stat-label">Ongoing</span>
-                        <span 
-                            className="stat-chip text-amber-700 dark:text-[#fde047]" 
+                        <span
+                            className="stat-chip text-amber-700 dark:text-[#fde047]"
                             style={{ borderColor: '#f59e0b' }}
                         >
                             Active
@@ -167,9 +167,9 @@ function CommitteeDashboard() {
 // Tournament Card Component
 function TournamentCard({ tournament, onView, onDelete }) {
     const statusColors = {
-        DRAFT: { bg: 'rgba(59, 130, 246, 0.12)', border: '#60a5fa', text: '#bfdbfe' },
-        ONGOING: { bg: 'rgba(245, 158, 11, 0.12)', border: '#f59e0b', text: '#fde047' },
-        FINISHED: { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#bbf7d0' },
+        DRAFT: { bg: 'var(--status-scheduled-bg)', border: 'var(--status-scheduled-border)', text: 'var(--status-scheduled-text)' },
+        ONGOING: { bg: 'var(--status-ongoing-bg)', border: 'var(--status-ongoing-border)', text: 'var(--status-ongoing-text)' },
+        FINISHED: { bg: 'var(--status-finished-bg)', border: 'var(--status-finished-border)', text: 'var(--status-finished-text)' },
     };
 
     const status = statusColors[tournament.status] || statusColors.DRAFT;
@@ -186,7 +186,7 @@ function TournamentCard({ tournament, onView, onDelete }) {
                         borderRadius: 999,
                         background: status.bg,
                         border: `1px solid ${status.border}`,
-                        /* Hapus baris color: status.text, */
+                        color: status.text,
                         textTransform: 'uppercase',
                         letterSpacing: '0.05em',
                         fontWeight: '600'
@@ -196,7 +196,7 @@ function TournamentCard({ tournament, onView, onDelete }) {
                 </span>
             </div>
 
-            <div className="text-slate-600 dark:text-gray-400" style={{ fontSize: 13, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
                 <p style={{ margin: '4px 0' }}>📍 {tournament.location}</p>
                 <p style={{ margin: '4px 0' }}>📅 {new Date(tournament.startDate).toLocaleDateString()}</p>
                 <p style={{ margin: '4px 0' }}>👥 {tournament.participantCount || 0} participants</p>
@@ -233,6 +233,12 @@ function CreateTournamentModal({ onClose, onSuccess }) {
         registrationDeadline: '',
         description: '',
         courts: 4,
+        // Schedule settings
+        dailyStartTime: '09:00',
+        dailyEndTime: '18:00',
+        matchDurationMinutes: 40,
+        breakStartTime: '',
+        breakEndTime: '',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -246,18 +252,51 @@ function CreateTournamentModal({ onClose, onSuccess }) {
         e.preventDefault();
         setError('');
 
-        // Validation
-        if (!formData.name || !formData.location || !formData.startDate) {
+        if (!formData.name || !formData.location || !formData.startDate || !formData.endDate) {
             setError('Please fill in all required fields');
             return;
         }
 
         try {
             setLoading(true);
+            // 1. Create the tournament
             const newTournament = await tournamentsApi.createTournament({
-                ...formData,
+                name: formData.name,
+                location: formData.location,
+                startDate: new Date(formData.startDate).toISOString(),
+                endDate: new Date(formData.endDate).toISOString(),
+                description: formData.description,
                 createdById: user.id,
+                // Registration deadline
+                registrationDeadline: formData.registrationDeadline ? new Date(formData.registrationDeadline).toISOString() : null,
+                // Schedule settings
+                dailyStartTime: formData.dailyStartTime || '09:00',
+                dailyEndTime: formData.dailyEndTime || '18:00',
+                matchDurationMinutes: parseInt(formData.matchDurationMinutes) || 40,
+                breakStartTime: formData.breakStartTime || null,
+                breakEndTime: formData.breakEndTime || null,
             });
+
+            // 2. Auto-create courts for this tournament (required by the scheduler)
+            const courtCount = Math.max(1, parseInt(formData.courts) || 4);
+            try {
+                await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/courts/bulk`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    },
+                    body: JSON.stringify({
+                        tournamentId: newTournament.id,
+                        count: courtCount,
+                        locationNote: formData.location,
+                    }),
+                });
+            } catch {
+                // Courts creation failure is non-fatal — can be added manually later
+                console.warn('Court auto-creation failed; courts can be added manually.');
+            }
+
             onSuccess(newTournament);
         } catch (err) {
             setError(err.message);
@@ -273,10 +312,7 @@ function CreateTournamentModal({ onClose, onSuccess }) {
                 onClick={onClose}
                 style={{
                     position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
+                    top: 0, left: 0, right: 0, bottom: 0,
                     background: 'rgba(0, 0, 0, 0.7)',
                     zIndex: 999,
                 }}
@@ -286,17 +322,14 @@ function CreateTournamentModal({ onClose, onSuccess }) {
             <div
                 style={{
                     position: 'fixed',
-                    top: '50%',
-                    left: '50%',
+                    top: '50%', left: '50%',
                     transform: 'translate(-50%, -50%)',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
+                    background: 'var(--modal-bg)',
+                    border: '1px solid var(--modal-border)',
                     borderRadius: 16,
                     padding: 24,
-                    maxWidth: 500,
-                    width: '90%',
-                    maxHeight: '90vh',
-                    overflow: 'auto',
+                    maxWidth: 500, width: '90%',
+                    maxHeight: '90vh', overflow: 'auto',
                     zIndex: 1000,
                 }}
             >
@@ -306,8 +339,8 @@ function CreateTournamentModal({ onClose, onSuccess }) {
                 </p>
 
                 {error && (
-                    <div style={{ padding: 12, backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, marginBottom: 16 }}>
-                        <p style={{ color: '#dc2626', fontSize: 14, margin: 0 }}>{error}</p>
+                    <div style={{ padding: 12, backgroundColor: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 6, marginBottom: 16 }}>
+                        <p style={{ color: '#f87171', fontSize: 14, margin: 0 }}>{error}</p>
                     </div>
                 )}
 
@@ -315,26 +348,18 @@ function CreateTournamentModal({ onClose, onSuccess }) {
                     <div className="form-group">
                         <label className="form-label">Tournament Name *</label>
                         <input
-                            type="text"
-                            name="name"
-                            className="form-input"
-                            placeholder="Spring Championship 2024"
-                            value={formData.name}
-                            onChange={handleChange}
-                            disabled={loading}
+                            type="text" name="name" className="form-input"
+                            placeholder="Spring Championship 2025"
+                            value={formData.name} onChange={handleChange} disabled={loading}
                         />
                     </div>
 
                     <div className="form-group">
                         <label className="form-label">Location *</label>
                         <input
-                            type="text"
-                            name="location"
-                            className="form-input"
+                            type="text" name="location" className="form-input"
                             placeholder="GOR Senayan, Jakarta"
-                            value={formData.location}
-                            onChange={handleChange}
-                            disabled={loading}
+                            value={formData.location} onChange={handleChange} disabled={loading}
                         />
                     </div>
 
@@ -342,24 +367,15 @@ function CreateTournamentModal({ onClose, onSuccess }) {
                         <div className="form-group">
                             <label className="form-label">Start Date *</label>
                             <input
-                                type="date"
-                                name="startDate"
-                                className="form-input"
-                                value={formData.startDate}
-                                onChange={handleChange}
-                                disabled={loading}
+                                type="date" name="startDate" className="form-input"
+                                value={formData.startDate} onChange={handleChange} disabled={loading}
                             />
                         </div>
-
                         <div className="form-group">
-                            <label className="form-label">End Date</label>
+                            <label className="form-label">End Date *</label>
                             <input
-                                type="date"
-                                name="endDate"
-                                className="form-input"
-                                value={formData.endDate}
-                                onChange={handleChange}
-                                disabled={loading}
+                                type="date" name="endDate" className="form-input"
+                                value={formData.endDate} onChange={handleChange} disabled={loading}
                             />
                         </div>
                     </div>
@@ -367,56 +383,110 @@ function CreateTournamentModal({ onClose, onSuccess }) {
                     <div className="form-group">
                         <label className="form-label">Registration Deadline</label>
                         <input
-                            type="date"
-                            name="registrationDeadline"
-                            className="form-input"
-                            value={formData.registrationDeadline}
-                            onChange={handleChange}
-                            disabled={loading}
+                            type="datetime-local" name="registrationDeadline" className="form-input"
+                            value={formData.registrationDeadline} onChange={handleChange} disabled={loading}
                         />
+                        <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
+                            Optional. Players cannot register after this date and time.
+                        </p>
                     </div>
 
                     <div className="form-group">
                         <label className="form-label">Number of Courts</label>
                         <input
-                            type="number"
-                            name="courts"
-                            className="form-input"
-                            min="1"
-                            value={formData.courts}
-                            onChange={handleChange}
-                            disabled={loading}
+                            type="number" name="courts" className="form-input"
+                            min="1" max="20"
+                            value={formData.courts} onChange={handleChange} disabled={loading}
                         />
+                        <p style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                            Courts will be auto-created and are required for scheduling matches.
+                        </p>
                     </div>
 
                     <div className="form-group">
                         <label className="form-label">Description</label>
                         <textarea
-                            name="description"
-                            className="form-input"
-                            rows="3"
+                            name="description" className="form-input" rows="3"
                             placeholder="Tournament description..."
-                            value={formData.description}
-                            onChange={handleChange}
-                            disabled={loading}
-                            style={{ resize: 'vertical' }}
+                            value={formData.description} onChange={handleChange}
+                            disabled={loading} style={{ resize: 'vertical' }}
                         />
+                    </div>
+
+                    {/* ── Schedule Settings ── */}
+                    <div style={{
+                        borderTop: '1px solid var(--border)',
+                        paddingTop: 16, marginTop: 4
+                    }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12 }}>
+                            🕐 Schedule Settings
+                        </p>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">Daily Start Time</label>
+                                <input
+                                    type="time" name="dailyStartTime" className="form-input"
+                                    value={formData.dailyStartTime} onChange={handleChange} disabled={loading}
+                                />
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">Daily End Time</label>
+                                <input
+                                    type="time" name="dailyEndTime" className="form-input"
+                                    value={formData.dailyEndTime} onChange={handleChange} disabled={loading}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="form-group" style={{ marginTop: 12, marginBottom: 12 }}>
+                            <label className="form-label">Match Duration (minutes)</label>
+                            <input
+                                type="number" name="matchDurationMinutes" className="form-input"
+                                min="15" max="120" step="5"
+                                value={formData.matchDurationMinutes} onChange={handleChange} disabled={loading}
+                            />
+                            <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
+                                Estimated time per match. Used by the scheduler to space match slots.
+                            </p>
+                        </div>
+
+                        <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 8 }}>
+                            Break / Lunch (optional)
+                        </p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">Break Start</label>
+                                <input
+                                    type="time" name="breakStartTime" className="form-input"
+                                    value={formData.breakStartTime} onChange={handleChange} disabled={loading}
+                                    placeholder="e.g. 12:00"
+                                />
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">Break End</label>
+                                <input
+                                    type="time" name="breakEndTime" className="form-input"
+                                    value={formData.breakEndTime} onChange={handleChange} disabled={loading}
+                                    placeholder="e.g. 13:00"
+                                />
+                            </div>
+                        </div>
+                        <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 6 }}>
+                            Leave blank for no break. The scheduler will skip this window.
+                        </p>
                     </div>
 
                     <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
                         <button
-                            type="submit"
-                            className="btn-primary"
-                            disabled={loading}
+                            type="submit" className="btn-primary" disabled={loading}
                             style={{ flex: 1, opacity: loading ? 0.7 : 1 }}
                         >
                             {loading ? 'Creating...' : 'Create Tournament'}
                         </button>
                         <button
-                            type="button"
-                            className="btn-outline"
-                            onClick={onClose}
-                            disabled={loading}
+                            type="button" className="btn-outline"
+                            onClick={onClose} disabled={loading}
                         >
                             Cancel
                         </button>
@@ -428,3 +498,4 @@ function CreateTournamentModal({ onClose, onSuccess }) {
 }
 
 export default CommitteeDashboard;
+
