@@ -23,8 +23,14 @@ export const participantsApi = {
     },
 
     // Self-register: logged-in PLAYER registers themselves into a tournament
+    // For doubles, include partnerEmail in data
     async selfRegister(data) {
         return await apiClient.post('/api/participants/self-register', data);
+    },
+
+    // Lookup partner by email for doubles registration
+    async lookupPartner(email, tournamentId) {
+        return await apiClient.get(`/api/participants/lookup-partner?email=${encodeURIComponent(email)}&tournamentId=${tournamentId}`);
     },
 
     // Get all tournaments the logged-in player has joined
@@ -34,4 +40,3 @@ export const participantsApi = {
 };
 
 export default participantsApi;
-

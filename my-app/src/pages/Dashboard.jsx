@@ -37,7 +37,7 @@ const MatchCard = ({ match }) => {
       </div>
 
       <div className="match-footer">
-        <span className="match-court">Court {court}</span>
+        <span className="match-court" style={{ fontWeight: 'bold', fontSize: 14, color: 'var(--text-primary)' }}>Court {court}</span>
         <span style={{ fontSize: 11 }}>
           Referee: {referee || "Belum ditugaskan"}
         </span>

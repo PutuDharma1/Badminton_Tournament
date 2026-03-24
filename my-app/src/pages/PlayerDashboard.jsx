@@ -44,13 +44,17 @@ function PlayerDashboard() {
         }
     };
 
-    const handleRegister = async (tournament) => {
+    const handleRegister = async (tournament, categoryId, partnerEmail) => {
         setRegistering(tournament.id);
         try {
-            await participantsApi.selfRegister({
+            const payload = {
                 tournamentId: tournament.id,
-                categoryId: tournament.categories?.[0]?.id || null,
-            });
+                categoryId: categoryId || tournament.categories?.[0]?.id || null,
+            };
+            if (partnerEmail) {
+                payload.partnerEmail = partnerEmail;
+            }
+            await participantsApi.selfRegister(payload);
             // Refresh data
             await fetchData();
             setShowRegisterModal(null);
@@ -191,7 +195,8 @@ function PlayerDashboard() {
             {showRegisterModal && (
                 <RegisterModal
                     tournament={showRegisterModal}
-                    onConfirm={() => handleRegister(showRegisterModal)}
+                    user={user}
+                    onConfirm={(categoryId, partnerEmail) => handleRegister(showRegisterModal, categoryId, partnerEmail)}
                     onClose={() => setShowRegisterModal(null)}
                     isLoading={registering === showRegisterModal.id}
                 />
@@ -334,7 +339,59 @@ function AvailableTournamentCard({ tournament, onRegister, isRegistering }) {
 
 // ─── Register Confirmation Modal ─────────────────────────────────────────────
 
-function RegisterModal({ tournament, onConfirm, onClose, isLoading }) {
+function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
+    // Filter categories based on user gender
+    const validCategories = (tournament.categories || []).filter(cat => 
+        cat.gender === 'MIXED' || (user?.gender && cat.gender.toUpperCase() === user.gender.toUpperCase())
+    );
+
+    const isCatFull = (cat) => cat.maxParticipants && (cat.participantCount || 0) >= cat.maxParticipants;
+    const availableCategories = validCategories.filter(cat => !isCatFull(cat));
+
+    const [selectedCategoryId, setSelectedCategoryId] = useState(
+        availableCategories.length > 0 ? availableCategories[0].id : ''
+    );
+
+    // Partner email state for doubles
+    const [partnerEmail, setPartnerEmail] = useState('');
+    const [partnerInfo, setPartnerInfo] = useState(null); // { id, name, email, gender }
+    const [partnerError, setPartnerError] = useState('');
+    const [verifyingPartner, setVerifyingPartner] = useState(false);
+
+    // Determine if selected category is DOUBLE
+    const selectedCategory = validCategories.find(cat => cat.id === Number(selectedCategoryId));
+    const isDoubles = selectedCategory?.categoryType === 'DOUBLE';
+
+    // Reset partner state when category changes
+    const handleCategoryChange = (newCategoryId) => {
+        setSelectedCategoryId(Number(newCategoryId));
+        setPartnerEmail('');
+        setPartnerInfo(null);
+        setPartnerError('');
+    };
+
+    // Verify partner email
+    const handleVerifyPartner = async () => {
+        if (!partnerEmail.trim()) {
+            setPartnerError('Please enter partner email');
+            return;
+        }
+        setVerifyingPartner(true);
+        setPartnerError('');
+        setPartnerInfo(null);
+        try {
+            const result = await participantsApi.lookupPartner(partnerEmail.trim(), tournament.id);
+            setPartnerInfo(result);
+        } catch (err) {
+            setPartnerError(err.message || 'Partner not found');
+        } finally {
+            setVerifyingPartner(false);
+        }
+    };
+
+    // Can register?
+    const canRegister = availableCategories.length > 0 && selectedCategoryId && (!isDoubles || partnerInfo);
+
     return (
         <>
             {/* Backdrop */}
@@ -358,11 +415,13 @@ function RegisterModal({ tournament, onConfirm, onClose, isLoading }) {
                     border: '1px solid var(--modal-border)',
                     borderRadius: 16,
                     padding: 24,
-                    maxWidth: 440, width: '90%',
+                    maxWidth: 480, width: '90%',
                     zIndex: 1000,
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
                 }}
             >
-                <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
+                <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 8px' }}>
                     Confirm Registration
                 </h2>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
@@ -384,6 +443,141 @@ function RegisterModal({ tournament, onConfirm, onClose, isLoading }) {
                     </div>
                 </div>
 
+                {validCategories.length > 0 ? (
+                    <>
+                        {/* Category selector */}
+                        <div style={{ marginBottom: 20 }}>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--text)' }}>
+                                Select Category
+                            </label>
+                            <select
+                                className="input-field"
+                                value={selectedCategoryId}
+                                onChange={(e) => handleCategoryChange(e.target.value)}
+                                style={{ width: '100%' }}
+                            >
+                                {validCategories.map(cat => {
+                                    const full = isCatFull(cat);
+                                    return (
+                                        <option key={cat.id} value={cat.id} disabled={full}>
+                                            {cat.name} ({cat.gender} • {cat.categoryType})
+                                            {cat.maxParticipants ? ` — ${cat.participantCount || 0}/${cat.maxParticipants}` : ''}
+                                            {full ? ' [FULL]' : ''}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                            {availableCategories.length === 0 && (
+                                <p style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>
+                                    All eligible categories are full.
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Partner email section for DOUBLES */}
+                        {isDoubles && (
+                            <div style={{
+                                marginBottom: 20,
+                                padding: 16,
+                                background: 'var(--card-bg)',
+                                border: '1px solid var(--border)',
+                                borderRadius: 12,
+                            }}>
+                                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>
+                                    🤝 Partner Registration
+                                </label>
+                                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, marginTop: 0 }}>
+                                    Enter your partner's email to register as a doubles pair.
+                                </p>
+
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <input
+                                        type="email"
+                                        className="form-input"
+                                        placeholder="partner@email.com"
+                                        value={partnerEmail}
+                                        onChange={(e) => {
+                                            setPartnerEmail(e.target.value);
+                                            if (partnerInfo) {
+                                                setPartnerInfo(null);
+                                            }
+                                            if (partnerError) {
+                                                setPartnerError('');
+                                            }
+                                        }}
+                                        disabled={verifyingPartner || isLoading}
+                                        style={{ flex: 1 }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleVerifyPartner();
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        className="btn-outline"
+                                        onClick={handleVerifyPartner}
+                                        disabled={verifyingPartner || !partnerEmail.trim() || isLoading}
+                                        style={{
+                                            whiteSpace: 'nowrap',
+                                            padding: '8px 16px',
+                                            fontSize: 13,
+                                            opacity: (verifyingPartner || !partnerEmail.trim()) ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {verifyingPartner ? '⏳ Checking...' : '🔍 Verify'}
+                                    </button>
+                                </div>
+
+                                {/* Partner error */}
+                                {partnerError && (
+                                    <div style={{
+                                        marginTop: 10,
+                                        padding: '8px 12px',
+                                        background: 'var(--danger-bg)',
+                                        border: '1px solid var(--danger-border)',
+                                        borderRadius: 8,
+                                    }}>
+                                        <p style={{ fontSize: 12, color: 'var(--danger-text)', margin: 0 }}>
+                                            ❌ {partnerError}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* Partner found card */}
+                                {partnerInfo && (
+                                    <div style={{
+                                        marginTop: 10,
+                                        padding: '10px 14px',
+                                        background: 'var(--status-finished-bg)',
+                                        border: '1px solid var(--status-finished-border)',
+                                        borderRadius: 8,
+                                    }}>
+                                        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--status-finished-text)', margin: '0 0 4px' }}>
+                                            ✅ Partner Found
+                                        </p>
+                                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0' }}>
+                                            <strong>Name:</strong> {partnerInfo.name}
+                                        </p>
+                                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0' }}>
+                                            <strong>Gender:</strong> {partnerInfo.gender || 'Not set'}
+                                        </p>
+                                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0' }}>
+                                            <strong>Email:</strong> {partnerInfo.email}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="alert-error" style={{ marginBottom: 20 }}>
+                        <p style={{ margin: 0, fontSize: 13 }}>
+                            There are no suitable categories available for your gender ({user?.gender || 'Unknown'}).
+                        </p>
+                    </div>
+                )}
+
                 <div style={{
                     padding: 12,
                     background: 'var(--status-scheduled-bg)',
@@ -392,16 +586,19 @@ function RegisterModal({ tournament, onConfirm, onClose, isLoading }) {
                     marginBottom: 20,
                 }}>
                     <p style={{ fontSize: 12, color: 'var(--status-scheduled-text)', margin: 0 }}>
-                        ℹ️ Your profile data (name, date of birth, gender) will be used for registration.
+                        ℹ️ Your profile data (name, date of birth, gender: {user?.gender}) will be used for registration.
+                        {isDoubles && partnerInfo && (
+                            <> Your team will be registered as <strong>"{user?.name?.split(' ').pop()} / {partnerInfo.name.split(' ').pop()}"</strong>.</>
+                        )}
                     </p>
                 </div>
 
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button
                         className="btn-primary"
-                        onClick={onConfirm}
-                        disabled={isLoading}
-                        style={{ flex: 1, opacity: isLoading ? 0.7 : 1 }}
+                        onClick={() => onConfirm(selectedCategoryId, isDoubles && partnerInfo ? partnerEmail.trim() : null)}
+                        disabled={isLoading || !canRegister}
+                        style={{ flex: 1, opacity: (isLoading || !canRegister) ? 0.7 : 1 }}
                     >
                         {isLoading ? 'Registering...' : '✅ Yes, Register Now'}
                     </button>

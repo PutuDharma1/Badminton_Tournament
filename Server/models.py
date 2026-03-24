@@ -69,21 +69,28 @@ class Category(db.Model):
     name = db.Column(db.String(255), nullable=False)
     gender = db.Column(db.String(50), nullable=False) # MALE, FEMALE, MIXED
     level = db.Column(db.String(50), nullable=False)  # BEGINNER, INTERMEDIATE, ADVANCED, PROFESSIONAL
+    category_type = db.Column(db.String(50), default='SINGLE') # SINGLE, DOUBLE
     min_age = db.Column(db.Integer, nullable=True)
     max_age = db.Column(db.Integer, nullable=True)
+    max_participants = db.Column(db.Integer, nullable=True)  # None = unlimited
     tournament_id = db.Column(db.Integer, db.ForeignKey('Tournament.id'), nullable=False)
 
     participants = db.relationship('Participant', backref='category', lazy=True)
     teams = db.relationship('Team', backref='category', lazy=True)
 
     def to_dict(self):
+        from models import Team
+        team_count = Team.query.filter_by(category_id=self.id).count()
         return {
             'id': self.id,
             'name': self.name,
             'gender': self.gender,
             'level': self.level,
+            'categoryType': self.category_type,
             'minAge': self.min_age,
             'maxAge': self.max_age,
+            'maxParticipants': self.max_participants,
+            'participantCount': team_count,
             'tournamentId': self.tournament_id
         }
 
@@ -103,6 +110,11 @@ class Participant(db.Model):
     user = db.relationship('User', backref='participants', lazy=True)
 
     def to_dict(self):
+        # Look up team info
+        tp = TeamParticipant.query.filter_by(participant_id=self.id).first()
+        team = None
+        if tp:
+            team = Team.query.get(tp.team_id)
         return {
             "id": self.id,
             "fullName": self.full_name,
@@ -114,6 +126,8 @@ class Participant(db.Model):
             "tournamentId": self.tournament_id,
             "categoryId": self.category_id,
             "userId": self.user_id,
+            "teamId": team.id if team else None,
+            "teamName": team.name if team else None,
             "user": {"name": self.user.name, "email": self.user.email} if self.user else None
         }
 
@@ -181,6 +195,8 @@ class Match(db.Model):
     home_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=False)
     away_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=False)
     winner_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=True)
+    retire_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=True)  # team that retired/walked out
+    finish_reason = db.Column(db.String(20), nullable=True)  # NORMAL, RETIRE, WALKOVER
     referee_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
     
     # Tambahkan relasi ini untuk mengambil detail skor per set
@@ -189,6 +205,7 @@ class Match(db.Model):
     home_team = db.relationship('Team', foreign_keys=[home_team_id], backref='home_matches')
     away_team = db.relationship('Team', foreign_keys=[away_team_id], backref='away_matches')
     winner_team = db.relationship('Team', foreign_keys=[winner_team_id], backref='won_matches', overlaps="won_matches")
+    retired_team = db.relationship('Team', foreign_keys=[retire_team_id], backref='retired_matches')
     court = db.relationship('Court', backref='matches')
     referee = db.relationship('User', backref='officiated_matches')
     category = db.relationship('Category', backref='matches')
@@ -220,6 +237,9 @@ class Match(db.Model):
             "awayTeam": {"id": self.away_team.id, "name": self.away_team.name} if self.away_team else None,
             "referee": {"id": self.referee.id, "name": self.referee.name} if self.referee else None,
             "winnerTeam": {"id": self.winner_team.id, "name": self.winner_team.name} if self.winner_team else None,
+            "retireTeamId": self.retire_team_id,
+            "retiredTeam": {"id": self.retired_team.id, "name": self.retired_team.name} if self.retired_team else None,
+            "finishReason": self.finish_reason,
         }
     
 class MatchSet(db.Model):

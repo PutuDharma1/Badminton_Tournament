@@ -1,6 +1,6 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from extensions import db
-from models import Category
+from models import Category, Team, Participant, Tournament
 
 category_blueprint = Blueprint('category', __name__, url_prefix='/api/categories')
 
@@ -10,4 +10,62 @@ def get_categories():
         categories = Category.query.all()
         return jsonify([c.to_dict() for c in categories]), 200
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@category_blueprint.route('/tournament/<int:tournament_id>', methods=['GET'])
+def get_tournament_categories(tournament_id):
+    try:
+        categories = Category.query.filter_by(tournament_id=tournament_id).all()
+        return jsonify([c.to_dict() for c in categories]), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@category_blueprint.route('/', methods=['POST'])
+def create_category():
+    data = request.get_json()
+    required = ['name', 'gender', 'level', 'tournamentId']
+    if not all(field in data for field in required):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        # Check tournament
+        tournament = Tournament.query.get(data['tournamentId'])
+        if not tournament:
+            return jsonify({"error": "Tournament not found"}), 404
+
+        new_cat = Category(
+            name=data['name'],
+            gender=data['gender'],
+            level=data['level'],
+            category_type=data.get('categoryType', 'SINGLE'),
+            min_age=data.get('minAge'),
+            max_age=data.get('maxAge'),
+            max_participants=data.get('maxParticipants'),
+            tournament_id=data['tournamentId']
+        )
+        db.session.add(new_cat)
+        db.session.commit()
+        return jsonify(new_cat.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@category_blueprint.route('/<int:id>', methods=['DELETE'])
+def delete_category(id):
+    try:
+        category = Category.query.get(id)
+        if not category:
+            return jsonify({"error": "Category not found"}), 404
+
+        # Check if participants or matches are tied to this category
+        has_participants = Participant.query.filter_by(category_id=id).first()
+        if has_participants:
+            return jsonify({"error": "Cannot delete category with registered participants."}), 400
+            
+        Team.query.filter_by(category_id=id).delete()
+        db.session.delete(category)
+        db.session.commit()
+        return jsonify({"message": "Category deleted successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500

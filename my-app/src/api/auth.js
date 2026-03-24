@@ -32,6 +32,11 @@ export const authApi = {
         return response;
     },
 
+    // Get all players
+    async getPlayers() {
+        return await apiClient.get('/api/auth/players');
+    },
+
     // Update user profile
     async updateProfile(userId, data) {
         const response = await apiClient.put(`/api/auth/users/${userId}`, data);

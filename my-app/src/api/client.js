@@ -54,7 +54,7 @@ class ApiClient {
             // Handle non-OK responses
             if (!response.ok) {
                 const error = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(error.message || `HTTP Error: ${response.status}`);
+                throw new Error(error.error || error.message || `HTTP Error: ${response.status}`);
             }
 
             // Parse JSON response

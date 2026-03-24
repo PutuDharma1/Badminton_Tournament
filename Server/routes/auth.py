@@ -55,7 +55,10 @@ def register():
                 "id": new_user.id,
                 "name": new_user.name,
                 "email": new_user.email,
-                "role": new_user.role
+                "role": new_user.role,
+                "gender": new_user.gender,
+                "birthDate": new_user.birth_date.isoformat() if new_user.birth_date else None,
+                "phone": new_user.phone
             },
             "token": access_token
         }), 201
@@ -83,7 +86,10 @@ def login():
                     "id": user.id,
                     "name": user.name,
                     "email": user.email,
-                    "role": user.role
+                    "role": user.role,
+                    "gender": user.gender,
+                    "birthDate": user.birth_date.isoformat() if user.birth_date else None,
+                    "phone": user.phone
                 },
                 "token": access_token
             }), 200
@@ -106,8 +112,27 @@ def get_current_user():
             "id": user.id,
             "name": user.name,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            "gender": user.gender,
+            "birthDate": user.birth_date.isoformat() if user.birth_date else None,
+            "phone": user.phone
         }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@auth_blueprint.route('/players', methods=['GET'])
+@jwt_required()
+def get_players():
+    try:
+        players = User.query.filter_by(role='PLAYER').all()
+        return jsonify([{
+            "id": p.id,
+            "name": p.name,
+            "email": p.email,
+            "gender": getattr(p, 'gender', None),
+            "birthDate": p.birth_date.isoformat() if getattr(p, 'birth_date', None) else None,
+            "phone": getattr(p, 'phone', None)
+        } for p in players]), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

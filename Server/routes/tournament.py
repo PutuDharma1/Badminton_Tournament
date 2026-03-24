@@ -306,14 +306,16 @@ def fix_teams(id):
 # Shared standings computation (used by leaderboard endpoint AND knockout seeding)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def compute_group_standings(tournament_id, group_code=None):
+def compute_group_standings(tournament_id, group_code=None, category_id=None):
     """
-    Compute standings for a tournament, optionally filtered to one group.
+    Compute standings for a tournament, optionally filtered to one group and/or category.
     Returns a sorted list of dicts (same shape as leaderboard response).
     """
     from sqlalchemy.orm import joinedload
 
     team_q = Team.query.filter_by(tournament_id=tournament_id)
+    if category_id is not None:
+        team_q = team_q.filter_by(category_id=category_id)
     if group_code:
         team_q = team_q.filter_by(group_code=group_code)
     teams = team_q.all()
@@ -334,6 +336,8 @@ def compute_group_standings(tournament_id, group_code=None):
     match_q = Match.query.filter_by(
         tournament_id=tournament_id, status='FINISHED', stage='GROUP'
     ).options(joinedload(Match.sets))
+    if category_id is not None:
+        match_q = match_q.filter_by(category_id=category_id)
     if group_code:
         match_q = match_q.filter_by(group_code=group_code)
     finished = match_q.all()
@@ -394,8 +398,9 @@ def compute_group_standings(tournament_id, group_code=None):
 @tournament_blueprint.route('/<int:id>/leaderboard', methods=['GET'])
 def get_leaderboard(id):
     """
-    Compute round-robin standings, optionally filtered by group.
-    Query params: ?group=A
+    Compute round-robin standings, organized by category and then by group.
+    Query params: ?group=A&categoryId=1
+    Response (if no filters): { categories: [{categoryId, categoryName, groups: [{code, standings: [...]}]}] }
     """
     try:
         tournament = Tournament.query.get(id)
@@ -403,23 +408,61 @@ def get_leaderboard(id):
             return jsonify({"error": "Tournament not found"}), 404
 
         group = request.args.get('group')  # optional filter
+        category_id_param = request.args.get('categoryId')
+        category_id = int(category_id_param) if category_id_param and category_id_param.isdigit() else None
 
-        if group:
-            standings = compute_group_standings(id, group)
+        if group and category_id:
+            standings = compute_group_standings(id, group, category_id)
             return jsonify(standings), 200
+
+        # Build full categorized leaderboard
+        teams_query = Team.query.filter_by(tournament_id=id)
+        if category_id:
+            teams_query = teams_query.filter_by(category_id=category_id)
+        if group:
+            teams_query = teams_query.filter_by(group_code=group)
+            
+        teams = teams_query.all()
+        
+        categories_map = {}
+        for t in teams:
+            cat_id = t.category_id or 0
+            if cat_id not in categories_map:
+                categories_map[cat_id] = set()
+            if t.group_code:
+                categories_map[cat_id].add(t.group_code)
+
+        categories_list = []
+        for cat_id, group_codes in sorted(categories_map.items()):
+            cat = Category.query.get(cat_id) if cat_id else None
+            cat_name = cat.name if cat else 'Unassigned'
+            
+            groups_data = []
+            for code in sorted(group_codes):
+                standings = compute_group_standings(id, code, cat_id)
+                groups_data.append({
+                    "code": code,
+                    "standings": standings
+                })
+                
+            categories_list.append({
+                "categoryId": cat_id,
+                "categoryName": cat_name,
+                "groups": groups_data
+            })
+
+        # Also return flat format for older clients if needed
+        flat_result = {}
+        if not category_id: 
+            # If no category filtered, just return categories response
+            return jsonify({"categories": categories_list}), 200
         else:
-            # Return per-group standings
-            teams = Team.query.filter_by(tournament_id=id).all()
-            group_codes = sorted(set(t.group_code for t in teams if t.group_code))
-
-            if not group_codes:
-                # Fallback: no groups, return all standings
-                return jsonify(compute_group_standings(id)), 200
-
-            result = {}
-            for code in group_codes:
-                result[code] = compute_group_standings(id, code)
-            return jsonify(result), 200
+            # If a specific category is requested but no group, return the groups dictionary 
+            # (backward compatibility for when it returned { "A": [...], "B": [...] })
+            if categories_list:
+                for grp in categories_list[0]['groups']:
+                    flat_result[grp['code']] = grp['standings']
+            return jsonify(flat_result), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -432,8 +475,8 @@ def get_leaderboard(id):
 @tournament_blueprint.route('/<int:id>/groups', methods=['GET'])
 def get_groups(id):
     """
-    Return group assignments for the tournament.
-    Response: { groups: [{code: 'A', teams: [{id, name, groupCode}] }] }
+    Return group assignments for the tournament, organized by category.
+    Response: { categories: [{categoryId, categoryName, groups: [{code, teams: [...]}]}] }
     """
     try:
         tournament = Tournament.query.get(id)
@@ -441,17 +484,37 @@ def get_groups(id):
             return jsonify({"error": "Tournament not found"}), 404
 
         teams = Team.query.filter_by(tournament_id=id).all()
-        groups_map = {}
+
+        # Group by category first, then by group_code
+        categories_map = {}
         for t in teams:
+            cat_id = t.category_id or 0
+            if cat_id not in categories_map:
+                categories_map[cat_id] = {}
             code = t.group_code or '?'
-            groups_map.setdefault(code, []).append(t.to_dict())
+            categories_map[cat_id].setdefault(code, []).append(t.to_dict())
 
-        groups = [
-            {"code": code, "teams": teams_list}
-            for code, teams_list in sorted(groups_map.items())
-        ]
+        # Build response with category info
+        categories_list = []
+        for cat_id, groups_map in sorted(categories_map.items()):
+            cat = Category.query.get(cat_id) if cat_id else None
+            cat_name = cat.name if cat else 'Unassigned'
+            groups = [
+                {"code": code, "teams": teams_list}
+                for code, teams_list in sorted(groups_map.items())
+            ]
+            categories_list.append({
+                "categoryId": cat_id,
+                "categoryName": cat_name,
+                "groups": groups,
+            })
 
-        return jsonify({"groups": groups}), 200
+        # Also return flat groups for backward compatibility
+        all_groups = []
+        for cat_data in categories_list:
+            all_groups.extend(cat_data['groups'])
+
+        return jsonify({"groups": all_groups, "categories": categories_list}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

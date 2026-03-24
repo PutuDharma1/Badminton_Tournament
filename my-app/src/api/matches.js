@@ -32,14 +32,25 @@ export const matchesApi = {
         return await apiClient.put(`/api/matches/${matchId}/finish`);
     },
 
-    // Assign referee to match
+    // Assign referee to match (Admin/Committee)
     async assignReferee(matchId, refereeId) {
         return await apiClient.put(`/api/matches/${matchId}/referee`, { refereeId });
+    },
+
+    // Self-assign referee to match (for REFEREE role)
+    async selfAssignReferee(matchId) {
+        return await apiClient.put(`/api/matches/${matchId}/self-assign`);
     },
 
     // Get available referees (users with REFEREE role)
     async getAvailableReferees() {
         return await apiClient.get('/api/matches/referees');
+    },
+
+    // Retire or walkover a team in a match
+    // reason: 'RETIRE' (injured mid-match) or 'WALKOVER' (no-show)
+    async retireMatch(matchId, retireTeamId, reason = 'RETIRE') {
+        return await apiClient.put(`/api/matches/${matchId}/retire`, { retireTeamId, reason });
     },
 };
 

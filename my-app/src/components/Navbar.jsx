@@ -243,40 +243,56 @@ const Navbar = () => {
 
                   {/* Menu Container */}
                   <div
-                    className="bg-white dark:bg-[#1f2937] border border-gray-200 dark:border-[#374151]"
                     style={{
                       position: 'absolute',
                       top: 'calc(100% + 8px)',
                       right: 0,
                       borderRadius: '8px',
                       minWidth: '200px',
-                      boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
                       zIndex: 1000,
                       overflow: 'hidden',
+                      background: isDarkMode ? '#1f2937' : '#ffffff',
+                      border: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}`,
                     }}
                   >
                     <button
                       onClick={() => { navigate('/profile'); setShowProfileMenu(false); }}
-                      className="w-full text-left cursor-pointer transition-colors text-slate-800 dark:text-[#f9fafb] hover:bg-slate-100 dark:hover:bg-[#374151]"
-                      style={{ padding: '12px 16px', background: 'transparent', border: 'none', fontSize: '14px' }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                        padding: '12px 16px', background: 'transparent', border: 'none', fontSize: '14px',
+                        color: isDarkMode ? '#f9fafb' : '#1e293b',
+                      }}
+                      onMouseEnter={e => e.target.style.background = isDarkMode ? '#374151' : '#f1f5f9'}
+                      onMouseLeave={e => e.target.style.background = 'transparent'}
                     >
                       👤 View Profile
                     </button>
 
                     <button
                       onClick={() => { navigate('/settings'); setShowProfileMenu(false); }}
-                      className="w-full text-left cursor-pointer transition-colors text-slate-800 dark:text-[#f9fafb] hover:bg-slate-100 dark:hover:bg-[#374151]"
-                      style={{ padding: '12px 16px', background: 'transparent', border: 'none', fontSize: '14px' }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                        padding: '12px 16px', background: 'transparent', border: 'none', fontSize: '14px',
+                        color: isDarkMode ? '#f9fafb' : '#1e293b',
+                      }}
+                      onMouseEnter={e => e.target.style.background = isDarkMode ? '#374151' : '#f1f5f9'}
+                      onMouseLeave={e => e.target.style.background = 'transparent'}
                     >
                       ⚙️ Settings
                     </button>
 
-                    <div className="border-t border-gray-200 dark:border-[#374151]" style={{ margin: '4px 0' }}></div>
+                    <div style={{ margin: '4px 0', borderTop: `1px solid ${isDarkMode ? '#374151' : '#e5e7eb'}` }}></div>
 
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left cursor-pointer transition-colors text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-[#374151]"
-                      style={{ padding: '12px 16px', background: 'transparent', border: 'none', fontSize: '14px', fontWeight: 500 }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+                        padding: '12px 16px', background: 'transparent', border: 'none', fontSize: '14px', fontWeight: 500,
+                        color: isDarkMode ? '#f87171' : '#dc2626',
+                      }}
+                      onMouseEnter={e => e.target.style.background = isDarkMode ? '#374151' : '#fef2f2'}
+                      onMouseLeave={e => e.target.style.background = 'transparent'}
                     >
                       🚪 Logout
                     </button>

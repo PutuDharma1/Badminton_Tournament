@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
 import matchesApi from '../api/matches';
 import participantsApi from '../api/participants';
+import authApi from '../api/auth';
+import { categoriesApi } from '../api/categories';
 import Toast from '../components/Toast';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -44,10 +46,12 @@ function TournamentManagement() {
   const [leaderboard, setLeaderboard] = useState({});
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [groups, setGroups] = useState([]);
+  const [groupCategories, setGroupCategories] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [knockoutMatches, setKnockoutMatches] = useState([]);
 
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [toast, setToast] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => { } });
@@ -106,6 +110,7 @@ function TournamentManagement() {
       setGroupsLoading(true);
       const data = await tournamentsApi.getGroups(id);
       setGroups(data.groups || []);
+      setGroupCategories(data.categories || []);
     } catch (err) {
       console.error('Failed to fetch groups:', err.message);
     } finally {
@@ -226,11 +231,12 @@ function TournamentManagement() {
   const matchesByDay = {};
   matches.forEach(m => {
     if (!m.scheduledAt) return;
-    const day = new Date(m.scheduledAt).toLocaleDateString();
+    const d = new Date(m.scheduledAt);
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     if (!matchesByDay[day]) matchesByDay[day] = [];
     matchesByDay[day].push(m);
   });
-  const dayKeys = Object.keys(matchesByDay).sort((a, b) => new Date(a) - new Date(b));
+  const dayKeys = Object.keys(matchesByDay).sort();
   const totalDays = dayKeys.length;
   const clampedDay = Math.min(selectedDay, Math.max(1, totalDays));
   const currentDayMatches = matchesByDay[dayKeys[clampedDay - 1]] || [];
@@ -242,10 +248,8 @@ function TournamentManagement() {
   const tabs = ['overview', 'participants'];
   if (isOngoing || isFinished) {
     tabs.push('groups', 'matches', 'leaderboard');
-    if (currentStage === 'KNOCKOUT' || knockoutMatches.length > 0) {
-      tabs.push('bracket');
-    }
   }
+  tabs.push('bracket');
 
   // Find champion if tournament is finished
   let championTeamName = null;
@@ -370,10 +374,23 @@ function TournamentManagement() {
               {tournament.endDate && (
                 <div><span style={{ color: 'var(--text-muted)' }}>End Date: </span>{new Date(tournament.endDate).toLocaleDateString()}</div>
               )}
-              {tournament.categories?.length > 0 && (
+              {tournament.categories?.length > 0 ? (
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Categories: </span>
-                  {tournament.categories.map(c => c.name).join(', ')}
+                  {tournament.categories.map(c => `${c.name} (${c.categoryType})`).join(', ')}
+                </div>
+              ) : (
+                <div>
+                  <span style={{ color: 'var(--text-muted)' }}>Categories: </span>
+                  <span style={{ color: 'var(--text-faint)' }}>None created yet</span>
+                </div>
+              )}
+              {tournament.status === 'DRAFT' && isCommittee && (
+                <div style={{ marginTop: 8 }}>
+                  <button type="button" className="btn-outline" style={{ padding: '6px 12px', fontSize: 13 }}
+                    onClick={() => setShowCategoryModal(true)}>
+                    Manage Categories
+                  </button>
                 </div>
               )}
             </div>
@@ -435,47 +452,121 @@ function TournamentManagement() {
               )}
             </div>
           ) : (
-            <div className="card">
-              <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #334155' }}>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500, width: 40 }}>#</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>ID</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Name</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Gender</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Category</th>
-                    <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {participants.map((p, idx) => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid var(--table-row-border)' }}>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{idx + 1}</td>
-                      <td style={{ padding: '10px 12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {(() => {
+                const grouped = {};
+                participants.forEach(p => {
+                  const cId = p.categoryId || 'unassigned';
+                  if (!grouped[cId]) grouped[cId] = [];
+                  grouped[cId].push(p);
+                });
+
+                const getCatName = (id) => {
+                  if (id === 'unassigned') return 'Unassigned';
+                  const cat = tournament?.categories?.find(c => c.id === Number(id));
+                  return cat ? cat.name : `Category ${id}`;
+                };
+
+                const getCatCapacity = (id) => {
+                  if (id === 'unassigned') return '';
+                  const cat = tournament?.categories?.find(c => c.id === Number(id));
+                  if (cat && cat.maxParticipants) {
+                    const count = cat.participantCount || 0;
+                    const full = count >= cat.maxParticipants;
+                    return { text: `${count}/${cat.maxParticipants}`, full };
+                  }
+                  return null;
+                };
+
+                return Object.keys(grouped).map(catId => {
+                  const capacity = getCatCapacity(catId);
+                  const catObj = tournament?.categories?.find(c => c.id === Number(catId));
+                  const isDouble = catObj?.categoryType === 'DOUBLE';
+
+                  // For doubles, group participants by teamId
+                  let rows;
+                  if (isDouble) {
+                    const teams = {};
+                    grouped[catId].forEach(p => {
+                      const tId = p.teamId || `solo-${p.id}`;
+                      if (!teams[tId]) teams[tId] = [];
+                      teams[tId].push(p);
+                    });
+                    rows = Object.values(teams);
+                  } else {
+                    rows = grouped[catId].map(p => [p]);
+                  }
+
+                  return (
+                  <div key={catId} className="card">
+                    <h4 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)', color: 'var(--text)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{getCatName(catId)} ({isDouble ? `${rows.length} teams` : grouped[catId].length})</span>
+                      {capacity && (
                         <span style={{
-                          fontFamily: 'monospace', fontSize: 12,
-                          background: 'rgba(96,165,250,0.1)', color: '#93c5fd',
-                          padding: '2px 6px', borderRadius: 4,
-                        }}>P-{String(p.id).padStart(3, '0')}</span>
-                      </td>
-                      <td style={{ padding: '10px 12px', fontWeight: 500 }}>
-                        {p.fullName || p.user?.name || 'Unknown'}
-                      </td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-                        {p.gender?.toLowerCase() || '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
-                        {p.categoryId ? `Cat. ${p.categoryId}` : '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{ color: p.isActive ? '#22c55e' : '#9ca3af', fontSize: 12 }}>
-                          {p.isActive ? '● Active' : '○ Inactive'}
+                          fontSize: 12, fontWeight: 500, padding: '2px 10px', borderRadius: 999,
+                          background: capacity.full ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+                          color: capacity.full ? '#f87171' : '#22c55e',
+                          border: `1px solid ${capacity.full ? '#ef4444' : '#22c55e'}`,
+                        }}>
+                          {capacity.text} {capacity.full ? 'FULL' : 'slots'}
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      )}
+                    </h4>
+                    <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #334155' }}>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500, width: 40 }}>#</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>{isDouble ? 'Team' : 'ID'}</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>{isDouble ? 'Players' : 'Name'}</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Gender</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((team, idx) => {
+                          const firstP = team[0];
+                          return (
+                          <tr key={firstP.teamId || firstP.id} style={{ borderBottom: '1px solid var(--table-row-border)' }}>
+                            <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{idx + 1}</td>
+                            <td style={{ padding: '10px 12px' }}>
+                              {isDouble ? (
+                                <span style={{
+                                  fontFamily: 'monospace', fontSize: 12,
+                                  background: 'rgba(96,165,250,0.1)', color: '#93c5fd',
+                                  padding: '2px 6px', borderRadius: 4,
+                                }}>T-{String(firstP.teamId || firstP.id).padStart(3, '0')}</span>
+                              ) : (
+                                <span style={{
+                                  fontFamily: 'monospace', fontSize: 12,
+                                  background: 'rgba(96,165,250,0.1)', color: '#93c5fd',
+                                  padding: '2px 6px', borderRadius: 4,
+                                }}>P-{String(firstP.id).padStart(3, '0')}</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '10px 12px', fontWeight: 500 }}>
+                              {isDouble
+                                ? team.map(p => p.fullName || p.user?.name || 'Unknown').join(' / ')
+                                : firstP.fullName || firstP.user?.name || 'Unknown'}
+                            </td>
+                            <td style={{ padding: '10px 12px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                              {isDouble
+                                ? [...new Set(team.map(p => p.gender?.toLowerCase()))].join(', ')
+                                : firstP.gender?.toLowerCase() || '\u2014'}
+                            </td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span style={{ color: firstP.isActive ? '#22c55e' : '#9ca3af', fontSize: 12 }}>
+                                {firstP.isActive ? '\u25cf Active' : '\u25cb Inactive'}
+                              </span>
+                            </td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+                });
+              })()}
             </div>
           )}
         </div>
@@ -483,7 +574,7 @@ function TournamentManagement() {
 
       {/* Groups Tab */}
       {activeTab === 'groups' && (
-        <GroupsTab groups={groups} loading={groupsLoading} />
+        <GroupsTab groups={groups} groupCategories={groupCategories} loading={groupsLoading} />
       )}
 
       {/* Leaderboard Tab */}
@@ -521,6 +612,8 @@ function TournamentManagement() {
       {/* Bracket Tab */}
       {activeTab === 'bracket' && (
         <BracketTab
+          tournament={tournament}
+          groupCategories={groupCategories}
           matches={knockoutMatches}
           isCommittee={isCommittee}
           onUpdate={fetchKnockoutMatches}
@@ -537,9 +630,21 @@ function TournamentManagement() {
         />
       )}
 
+      {showCategoryModal && (
+        <ManageCategoriesModal
+          tournament={tournament}
+          onClose={() => setShowCategoryModal(false)}
+          onSuccess={() => {
+            fetchTournament();
+            showToast('Categories updated successfully');
+          }}
+        />
+      )}
+
       {showAddPlayerModal && (
         <AddPlayerModal
           tournament={tournament}
+          participants={participants}
           onClose={() => setShowAddPlayerModal(false)}
           onSuccess={() => {
             setShowAddPlayerModal(false);
@@ -587,14 +692,12 @@ function MatchesTab({
     );
   }
 
-  // Group by group_code within the current day
-  const byGroup = {};
-  matches.forEach(m => {
-    const g = m.groupCode || '?';
-    if (!byGroup[g]) byGroup[g] = [];
-    byGroup[g].push(m);
+  // Sort matches chronologically
+  const sortedMatches = [...matches].sort((a, b) => {
+    if (!a.scheduledAt) return 1;
+    if (!b.scheduledAt) return -1;
+    return new Date(a.scheduledAt) - new Date(b.scheduledAt);
   });
-  const groupCodes = Object.keys(byGroup).sort();
 
   return (
     <div>
@@ -660,29 +763,15 @@ function MatchesTab({
           <p style={{ color: '#9ca3af' }}>No matches on this day.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 24 }}>
-          {groupCodes.map(code => (
-            <div key={code}>
-              <h4 style={{
-                fontSize: 14, fontWeight: 600, marginBottom: 10,
-                padding: '4px 12px', borderRadius: 6,
-                background: 'rgba(96,165,250,0.1)', color: '#60a5fa',
-                display: 'inline-block',
-              }}>
-                Group {code}
-              </h4>
-              <div style={{ display: 'grid', gap: 14 }}>
-                {byGroup[code].map(match => (
-                  <MatchCard
-                    key={match.id}
-                    match={match}
-                    isCommittee={isCommittee}
-                    onUpdate={onUpdate}
-                    showToast={showToast}
-                  />
-                ))}
-              </div>
-            </div>
+        <div style={{ display: 'grid', gap: 14 }}>
+          {sortedMatches.map(match => (
+            <MatchCard
+              key={match.id}
+              match={match}
+              isCommittee={isCommittee}
+              onUpdate={onUpdate}
+              showToast={showToast}
+            />
           ))}
         </div>
       )}
@@ -696,6 +785,7 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
   const [editingScore, setEditingScore] = useState(false);
   const [sets, setSets] = useState(() => initSets(match.sets));
   const [saving, setSaving] = useState(false);
+  const [showRetireModal, setShowRetireModal] = useState(false);
 
   // Initialize 3 set slots from existing match.sets data
   function initSets(existingSets = []) {
@@ -792,6 +882,20 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
     }
   };
 
+  const handleRetire = async (retireTeamId, reason) => {
+    try {
+      setSaving(true);
+      await matchesApi.retireMatch(match.id, retireTeamId, reason);
+      showToast(`Match ended: ${reason === 'RETIRE' ? 'Retired' : 'Walk Out'}`, 'success');
+      setShowRetireModal(false);
+      onUpdate();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const homeTeamName = match.homeTeam?.name || 'TBD';
   const awayTeamName = match.awayTeam?.name || 'TBD';
   const isWinnerHome = match.winnerTeamId && match.winnerTeamId === match.homeTeamId;
@@ -804,7 +908,9 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
         <div>
           <span style={{ fontSize: 11, color: 'var(--text-faint)', display: 'block', marginBottom: 4 }}>
             Round {match.round} · Match #{match.id}
-            {match.court && ` · ${match.court.name}`}
+            {match.category && ` · ${match.category.name}`}
+            {match.court && <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}> · {match.court.name}</span>}
+            {' · '}👨‍⚖️ {match.referee ? match.referee.name : 'Unassigned'}
           </span>
           {match.scheduledAt && (
             <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
@@ -831,7 +937,20 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
             </span>
           </div>
         </div>
-        <StatusBadge status={match.status} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <StatusBadge status={match.status} />
+          {match.finishReason && match.finishReason !== 'NORMAL' && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
+              background: match.finishReason === 'RETIRE' ? 'rgba(239,68,68,0.1)' : 'rgba(249,115,22,0.1)',
+              color: match.finishReason === 'RETIRE' ? '#ef4444' : '#f97316',
+              border: `1px solid ${match.finishReason === 'RETIRE' ? 'rgba(239,68,68,0.3)' : 'rgba(249,115,22,0.3)'}`,
+            }}>
+              {match.finishReason === 'RETIRE' ? '🤕 Retired' : '🚫 Walk Out'}
+              {match.retiredTeam ? ` (${match.retiredTeam.name})` : ''}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Sets score display */}
@@ -943,7 +1062,7 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
 
         {/* Action buttons */}
         {isCommittee && match.status !== 'FINISHED' && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {!editingScore && (
               <button
                 className="btn-outline"
@@ -963,6 +1082,19 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
                 Finish Match
               </button>
             )}
+            {!editingScore && (
+              <button
+                onClick={() => setShowRetireModal(true)}
+                disabled={saving}
+                style={{
+                  fontSize: 12, padding: '4px 12px', fontWeight: 600, cursor: 'pointer',
+                  background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                  border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
+                }}
+              >
+                🏳️ Retire / Walk Out
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -976,6 +1108,15 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
             onUpdate();
           }}
           showToast={showToast}
+        />
+      )}
+
+      {showRetireModal && (
+        <RetireModal
+          match={match}
+          onClose={() => setShowRetireModal(false)}
+          onRetire={handleRetire}
+          saving={saving}
         />
       )}
     </div>
@@ -1051,6 +1192,108 @@ function RefereeAssignModal({ matchId, onClose, onSuccess, showToast }) {
             {saving ? 'Assigning...' : 'Assign'}
           </button>
           <button className="btn-outline" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Retire / Walk Out Modal ────────────────────────────────────────────────────
+function RetireModal({ match, onClose, onRetire, saving }) {
+  const [selectedTeamId, setSelectedTeamId] = useState(null);
+  const [reason, setReason] = useState('RETIRE');
+
+  const homeName = match.homeTeam?.name || 'Home';
+  const awayName = match.awayTeam?.name || 'Away';
+
+  const winnerName = selectedTeamId === match.homeTeamId ? awayName : homeName;
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+        background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24,
+        maxWidth: 420, width: '90%', zIndex: 1000,
+      }}>
+        <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>🏳️ Retire / Walk Out</h3>
+
+        {/* Team selection */}
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>Pilih tim yang retire / walk out:</p>
+        <div style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
+          {[
+            { id: match.homeTeamId, name: homeName },
+            { id: match.awayTeamId, name: awayName },
+          ].map(team => (
+            <div
+              key={team.id}
+              onClick={() => setSelectedTeamId(team.id)}
+              style={{
+                padding: 12, borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
+                border: selectedTeamId === team.id ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                background: selectedTeamId === team.id ? 'rgba(239,68,68,0.06)' : 'var(--bg-subtle)',
+                fontWeight: selectedTeamId === team.id ? 600 : 400,
+                color: selectedTeamId === team.id ? '#ef4444' : 'var(--text-primary)',
+              }}
+            >
+              {team.name}
+            </div>
+          ))}
+        </div>
+
+        {/* Reason selector */}
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>Alasan:</p>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button
+            type="button"
+            onClick={() => setReason('RETIRE')}
+            style={{
+              flex: 1, padding: '10px 8px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              borderRadius: 8, transition: 'all 0.15s',
+              background: reason === 'RETIRE' ? 'rgba(239,68,68,0.12)' : 'var(--bg-subtle)',
+              border: reason === 'RETIRE' ? '1.5px solid #ef4444' : '1px solid var(--border)',
+              color: reason === 'RETIRE' ? '#ef4444' : 'var(--text-secondary)',
+            }}
+          >
+            🤕 Retire<br/>
+            <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.8 }}>Cedera / Tidak bisa lanjut</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReason('WALKOVER')}
+            style={{
+              flex: 1, padding: '10px 8px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              borderRadius: 8, transition: 'all 0.15s',
+              background: reason === 'WALKOVER' ? 'rgba(249,115,22,0.12)' : 'var(--bg-subtle)',
+              border: reason === 'WALKOVER' ? '1.5px solid #f97316' : '1px solid var(--border)',
+              color: reason === 'WALKOVER' ? '#f97316' : 'var(--text-secondary)',
+            }}
+          >
+            🚫 Walk Out<br/>
+            <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.8 }}>Tidak hadir / Mengundurkan diri</span>
+          </button>
+        </div>
+
+        {selectedTeamId && (
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, background: 'var(--bg-subtle)', padding: '8px 12px', borderRadius: 8 }}>
+            <strong>{winnerName}</strong> akan otomatis memenangkan match ini.
+          </p>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => onRetire(selectedTeamId, reason)}
+            disabled={!selectedTeamId || saving}
+            style={{
+              flex: 1, padding: '10px 16px', fontSize: 13, fontWeight: 600,
+              background: '#ef4444', color: 'white', border: 'none',
+              borderRadius: 8, cursor: (!selectedTeamId || saving) ? 'not-allowed' : 'pointer',
+              opacity: (!selectedTeamId || saving) ? 0.5 : 1,
+            }}
+          >
+            {saving ? 'Processing...' : `Confirm ${reason === 'RETIRE' ? 'Retire' : 'Walk Out'}`}
+          </button>
+          <button className="btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
         </div>
       </div>
     </>
@@ -1181,39 +1424,54 @@ function EditTournamentModal({ tournament, onClose, onSave }) {
   );
 }
 
-// ─── Add Player Modal ───────────────────────────────────────────────────────────
-function AddPlayerModal({ tournament, onClose, onSuccess }) {
-  const [formData, setFormData] = useState({
-    fullName: '',
-    birthDate: '',
-    gender: 'MALE',
-    email: '',
-    phone: '',
-  });
+// ─── Manage Categories Modal ──────────────────────────────────────────────────────
+function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    gender: 'MIXED',
+    level: 'OPEN',
+    categoryType: 'SINGLE',
+    minAge: '',
+    maxAge: '',
+    maxParticipants: ''
+  });
 
-  const handleSubmit = async (e) => {
+  const handleDelete = async (catId) => {
+    if (!window.confirm("Are you sure you want to delete this category?")) return;
+    try {
+      setLoading(true);
+      await categoriesApi.delete(catId);
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to delete category');
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async (e) => {
     e.preventDefault();
     setError('');
-
-    if (!formData.fullName || !formData.birthDate) {
-      setError('Full Name and Birth Date are required.');
+    
+    if (!formData.name) {
+      setError('Category name is required.');
       return;
     }
 
     try {
       setLoading(true);
-      await participantsApi.addParticipant(tournament.id, {
-        fullName: formData.fullName,
-        birthDate: new Date(formData.birthDate).toISOString(),
-        gender: formData.gender,
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
+      await categoriesApi.create({
+        ...formData,
+        tournamentId: tournament.id,
+        minAge: formData.minAge ? parseInt(formData.minAge) : null,
+        maxAge: formData.maxAge ? parseInt(formData.maxAge) : null,
+        maxParticipants: formData.maxParticipants ? parseInt(formData.maxParticipants) : null,
       });
+      setFormData({ name: '', gender: 'MIXED', level: 'OPEN', categoryType: 'SINGLE', minAge: '', maxAge: '', maxParticipants: '' });
       onSuccess();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Failed to create category');
     } finally {
       setLoading(false);
     }
@@ -1225,11 +1483,11 @@ function AddPlayerModal({ tournament, onClose, onSuccess }) {
       <div style={{
         position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
         background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24,
-        maxWidth: 460, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000,
+        maxWidth: 500, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000,
       }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Add Player</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Manage Categories</h2>
         <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>
-          Register a participant for this tournament.
+          Create and manage categories like Men's Singles or Mixed Doubles.
         </p>
 
         {error && (
@@ -1238,68 +1496,268 @@ function AddPlayerModal({ tournament, onClose, onSuccess }) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Full Name *</label>
-            <input
-              type="text" className="form-input" placeholder="Player full name"
-              value={formData.fullName}
-              onChange={e => setFormData({ ...formData, fullName: e.target.value })}
-              disabled={loading}
-            />
-          </div>
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-faint)' }}>Existing Categories</h3>
+          {tournament.categories?.length > 0 ? (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {tournament.categories.map(c => (
+                <div key={c.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '8px 12px', borderRadius: 8
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+                      {c.gender} • {c.categoryType}
+                      {c.maxParticipants ? ` • ${c.participantCount || 0}/${c.maxParticipants} slots` : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13 }}
+                    disabled={loading}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No categories created yet.</div>
+          )}
+        </div>
 
+        <form onSubmit={handleCreate}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--text-faint)' }}>Add New Category</h3>
+          <div className="form-group">
+            <label className="form-label">Category Name *</label>
+            <input type="text" className="form-input" placeholder="e.g. Men's Doubles Open"
+              value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} disabled={loading} />
+          </div>
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label className="form-label">Birth Date *</label>
-              <input
-                type="date" className="form-input"
-                value={formData.birthDate}
-                onChange={e => setFormData({ ...formData, birthDate: e.target.value })}
-                disabled={loading}
-              />
+              <label className="form-label">Format Type</label>
+              <select className="form-input" value={formData.categoryType} onChange={e => setFormData({...formData, categoryType: e.target.value})} disabled={loading}>
+                <option value="SINGLE">Single (1v1)</option>
+                <option value="DOUBLE">Double (2v2)</option>
+              </select>
             </div>
             <div className="form-group">
               <label className="form-label">Gender</label>
-              <select
-                className="form-input"
-                value={formData.gender}
-                onChange={e => setFormData({ ...formData, gender: e.target.value })}
-                disabled={loading}
-              >
+              <select className="form-input" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})} disabled={loading}>
                 <option value="MALE">Male</option>
                 <option value="FEMALE">Female</option>
+                <option value="MIXED">Mixed</option>
               </select>
             </div>
           </div>
-
+          
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
-              <label className="form-label">Email (optional)</label>
-              <input
-                type="email" className="form-input" placeholder="player@email.com"
-                value={formData.email}
-                onChange={e => setFormData({ ...formData, email: e.target.value })}
-                disabled={loading}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phone (optional)</label>
-              <input
-                type="text" className="form-input" placeholder="+62..."
-                value={formData.phone}
-                onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                disabled={loading}
-              />
+              <label className="form-label">Max Teams/Players</label>
+              <input type="number" className="form-input" placeholder="e.g. 16 (empty = unlimited)"
+                value={formData.maxParticipants} onChange={e => setFormData({...formData, maxParticipants: e.target.value})} disabled={loading} min="2" />
             </div>
           </div>
+          
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button type="submit" className="btn-primary" disabled={loading} style={{ flex: 1 }}>
+              {loading ? 'Processing...' : 'Add Category'}
+            </button>
+            <button type="button" className="btn-outline" onClick={onClose} disabled={loading}>Close</button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
+
+// ─── Add Player Modal ───────────────────────────────────────────────────────────
+function AddPlayerModal({ tournament, participants, onClose, onSuccess }) {
+  const [categoryId, setCategoryId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [players, setPlayers] = useState([]);
+  
+  const selectedCategory = tournament.categories?.find(c => c.id.toString() === categoryId);
+  const isDouble = selectedCategory?.categoryType === 'DOUBLE';
+
+  const initialPlayerState = { fullName: '', birthDate: '', gender: 'MALE', email: '', phone: '', userId: '', mode: 'new', search: '', showDropdown: false };
+  const [p1, setP1] = useState({...initialPlayerState});
+  const [p2, setP2] = useState({...initialPlayerState});
+
+  useEffect(() => {
+    authApi.getPlayers().then(data => {
+      const existingIds = new Set(participants.map(p => p.userId || (p.user && p.user.id)).filter(Boolean));
+      setPlayers(data.filter(u => !existingIds.has(u.id)));
+    }).catch(console.error);
+
+    if (tournament.categories?.length > 0) {
+      setCategoryId(tournament.categories[0].id.toString());
+    }
+  }, [participants, tournament]);
+
+  const handlePlayerSelect = (pObj, dbPlayer) => {
+    pObj.setter({
+      ...pObj.state,
+      search: `${dbPlayer.name} ${dbPlayer.email ? `(${dbPlayer.email})` : ''}`,
+      showDropdown: false,
+      fullName: dbPlayer.name || '',
+      birthDate: dbPlayer.birthDate ? dbPlayer.birthDate.split('T')[0] : '',
+      gender: dbPlayer.gender || 'MALE',
+      email: dbPlayer.email || '',
+      phone: dbPlayer.phone || '',
+      userId: dbPlayer.id
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!categoryId) {
+      setError('Please select a category first.');
+      return;
+    }
+
+    // Validate P1
+    if (p1.mode === 'existing' && !p1.userId) return setError('Please select a registered player for Player 1.');
+    if (!p1.fullName || !p1.birthDate) return setError('Full Name and Birth Date are required for Player 1.');
+
+    // Validate P2
+    if (isDouble) {
+      if (p2.mode === 'existing' && !p2.userId) return setError('Please select a registered player for Player 2.');
+      if (!p2.fullName || !p2.birthDate) return setError('Full Name and Birth Date are required for Player 2.');
+      if (p1.userId && p1.userId === p2.userId) return setError('Player 1 and Player 2 cannot be the same registered user.');
+    }
+
+    try {
+      setLoading(true);
+      const payload = {
+        categoryId: parseInt(categoryId),
+        player1: {
+          fullName: p1.fullName,
+          birthDate: new Date(p1.birthDate).toISOString(),
+          gender: p1.gender,
+          email: p1.email || undefined,
+          phone: p1.phone || undefined,
+          userId: p1.userId || undefined,
+        }
+      };
+      
+      if (isDouble) {
+        payload.player2 = {
+          fullName: p2.fullName,
+          birthDate: new Date(p2.birthDate).toISOString(),
+          gender: p2.gender,
+          email: p2.email || undefined,
+          phone: p2.phone || undefined,
+          userId: p2.userId || undefined,
+        };
+      }
+
+      await participantsApi.addParticipant(tournament.id, payload);
+
+      onSuccess();
+    } catch (err) {
+      setError(err.message || 'Failed to add participant');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderPlayerForm = (pObj, title) => {
+    const { state, setter } = pObj;
+    const filtered = players.filter(p => p.name.toLowerCase().includes(state.search.toLowerCase()) || (p.email && p.email.toLowerCase().includes(state.search.toLowerCase())));
+
+    return (
+      <div style={{ padding: '16px', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ fontWeight: 600, marginBottom: 12, color: 'var(--text-main)' }}>{title}</div>
+        
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, background: 'var(--bg-subtle)', padding: 4, borderRadius: 8 }}>
+          <button type="button" onClick={() => setter({...initialPlayerState, mode: 'new'})} 
+            style={{ flex: 1, padding: '6px 0', fontSize: 12, fontWeight: 600, background: state.mode === 'new' ? 'var(--bg-elevated)' : 'transparent', color: state.mode === 'new' ? 'var(--text-main)' : 'var(--text-muted)', border: 'none', borderRadius: 6, cursor: 'pointer', boxShadow: state.mode === 'new' ? '0 1px 3px rgba(0,0,0,0.2)' : 'none' }}>
+            Walk-in Player
+          </button>
+          <button type="button" onClick={() => setter({...initialPlayerState, mode: 'existing'})}
+            style={{ flex: 1, padding: '6px 0', fontSize: 12, fontWeight: 600, background: state.mode === 'existing' ? 'var(--bg-elevated)' : 'transparent', color: state.mode === 'existing' ? 'var(--text-main)' : 'var(--text-muted)', border: 'none', borderRadius: 6, cursor: 'pointer', boxShadow: state.mode === 'existing' ? '0 1px 3px rgba(0,0,0,0.2)' : 'none' }}>
+            Existing User
+          </button>
+        </div>
+
+        {state.mode === 'existing' && (
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label className="form-label">Search Registered Player *</label>
+            <input type="text" className="form-input" placeholder="Type name or email..." value={state.search} disabled={loading}
+              onChange={e => setter({...state, search: e.target.value, showDropdown: true, userId: ''})}
+              onFocus={() => setter({...state, showDropdown: true})} />
+            {state.showDropdown && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, maxHeight: 150, overflowY: 'auto', zIndex: 1050, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)' }}>
+                {filtered.map(p => (
+                  <div key={p.id} onClick={() => handlePlayerSelect(pObj, p)} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13 }} onMouseEnter={(e) => e.target.style.background = 'var(--bg-subtle)'} onMouseLeave={(e) => e.target.style.background = 'var(--bg-card)'}>
+                    <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{p.name}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.email}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="form-group">
+          <label className="form-label">Full Name *</label>
+          <input type="text" className="form-input" value={state.fullName} disabled={loading || state.mode === 'existing'}
+            onChange={e => setter({...state, fullName: e.target.value})} placeholder="Player full name" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Birth Date *</label>
+            <input type="date" className="form-input" value={state.birthDate} disabled={loading || state.mode === 'existing'}
+              onChange={e => setter({...state, birthDate: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Gender</label>
+            <select className="form-input" value={state.gender} disabled={loading || state.mode === 'existing'}
+              onChange={e => setter({...state, gender: e.target.value})}>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24, maxWidth: 500, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000}}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Add Player</h2>
+        
+        {error && <div style={{ padding: 12, background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 8, marginBottom: 16, color: '#f87171', fontSize: 14 }}>{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group" style={{ marginBottom: 20 }}>
+            <label className="form-label">Select Category *</label>
+            {tournament.categories?.length > 0 ? (
+              <select className="form-input" value={categoryId} onChange={e => setCategoryId(e.target.value)} disabled={loading}>
+                {tournament.categories.map(c => <option key={c.id} value={c.id}>{c.name} ({c.categoryType})</option>)}
+              </select>
+            ) : (
+              <div style={{ fontSize: 13, color: '#ef4444' }}>Please create a Category first.</div>
+            )}
+          </div>
+
+          {categoryId && (
+            <>
+              {renderPlayerForm({state: p1, setter: setP1}, isDouble ? "Player 1" : "Player Details")}
+              {isDouble && renderPlayerForm({state: p2, setter: setP2}, "Player 2")}
+            </>
+          )}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-            <button
-              type="submit" className="btn-primary" disabled={loading}
-              style={{ flex: 1, opacity: loading ? 0.7 : 1 }}
-            >
-              {loading ? 'Adding...' : 'Add Player'}
+            <button type="submit" className="btn-primary" disabled={loading || !categoryId} style={{ flex: 1 }}>
+              {loading ? 'Adding...' : isDouble ? 'Add Team' : 'Add Player'}
             </button>
             <button type="button" className="btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
           </div>
@@ -1309,8 +1767,9 @@ function AddPlayerModal({ tournament, onClose, onSuccess }) {
   );
 }
 
+
 // ─── Groups Tab ─────────────────────────────────────────────────────────────────
-function GroupsTab({ groups, loading }) {
+function GroupsTab({ groups, groupCategories, loading }) {
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
@@ -1319,7 +1778,9 @@ function GroupsTab({ groups, loading }) {
     );
   }
 
-  if (!groups || groups.length === 0) {
+  const cats = groupCategories && groupCategories.length > 0 ? groupCategories : null;
+
+  if ((!cats && (!groups || groups.length === 0)) || (cats && cats.length === 0)) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: 40 }}>
         <p style={{ color: 'var(--text-muted)' }}>Groups will appear here after the tournament starts.</p>
@@ -1327,46 +1788,70 @@ function GroupsTab({ groups, loading }) {
     );
   }
 
+  const renderGroup = (group) => (
+    <div key={group.code} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{
+        padding: '12px 16px',
+        background: 'rgba(96,165,250,0.1)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#60a5fa' }}>
+          Group {group.code}
+        </h4>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {group.teams.length} player{group.teams.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <div style={{ padding: '8px 0' }}>
+        {group.teams.map((team, idx) => (
+          <div key={team.id} style={{
+            padding: '8px 16px',
+            display: 'flex', alignItems: 'center', gap: 10,
+            borderBottom: idx < group.teams.length - 1 ? '1px solid var(--table-row-border)' : 'none',
+          }}>
+            <span style={{
+              width: 24, height: 24, borderRadius: '50%',
+              background: 'var(--bg-subtle)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
+            }}>
+              {idx + 1}
+            </span>
+            <span style={{ fontSize: 14, fontWeight: 500 }}>{team.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (cats) {
+    return (
+      <div>
+        {cats.map(cat => (
+          <div key={cat.categoryId} style={{ marginBottom: 32 }}>
+            <h3 style={{
+              fontSize: 17, fontWeight: 700, marginBottom: 16,
+              paddingBottom: 8, borderBottom: '2px solid var(--border)',
+              color: 'var(--text)',
+            }}>
+              {cat.categoryName}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
+              {cat.groups.map(renderGroup)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Fallback: flat groups (backward compatibility)
   return (
     <div>
       <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Group Assignments</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16 }}>
-        {groups.map(group => (
-          <div key={group.code} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{
-              padding: '12px 16px',
-              background: 'rgba(96,165,250,0.1)',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#60a5fa' }}>
-                Group {group.code}
-              </h4>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {group.teams.length} player{group.teams.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div style={{ padding: '8px 0' }}>
-              {group.teams.map((team, idx) => (
-                <div key={team.id} style={{
-                  padding: '8px 16px',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  borderBottom: idx < group.teams.length - 1 ? '1px solid var(--table-row-border)' : 'none',
-                }}>
-                  <span style={{
-                    width: 24, height: 24, borderRadius: '50%',
-                    background: 'var(--bg-subtle)', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
-                  }}>
-                    {idx + 1}
-                  </span>
-                  <span style={{ fontSize: 14, fontWeight: 500 }}>{team.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+        {groups.map(renderGroup)}
       </div>
     </div>
   );
@@ -1392,23 +1877,24 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
     { key: 'PD', label: 'PD', title: 'Point Difference' },
   ];
 
-  // leaderboard is now { A: [...], B: [...] } or an old-style array
-  const isGrouped = leaderboard && !Array.isArray(leaderboard);
-  const groupCodes = isGrouped ? Object.keys(leaderboard).sort() : [];
-  const displayGroups = selectedGroup
-    ? [selectedGroup]
-    : groupCodes.length > 0
-      ? groupCodes
-      : [];
+  const categories = leaderboard?.categories || [];
+  const isOldStyle = !leaderboard?.categories && leaderboard && !Array.isArray(leaderboard);
+  const oldStyleGroups = isOldStyle ? Object.keys(leaderboard).sort() : [];
+  const isArray = Array.isArray(leaderboard);
 
-  const isEmpty = isGrouped
-    ? Object.values(leaderboard).every(arr => arr.length === 0)
-    : Array.isArray(leaderboard) && leaderboard.length === 0;
+  let isEmpty = true;
+  if (categories.length > 0) {
+    isEmpty = categories.every(c => c.groups.every(g => g.standings.length === 0));
+  } else if (isOldStyle) {
+    isEmpty = oldStyleGroups.every(k => leaderboard[k].length === 0);
+  } else if (isArray) {
+    isEmpty = leaderboard.length === 0;
+  }
 
-  const renderTable = (rows, groupCode) => {
+  const renderTable = (rows, groupCode, keyPrefix = '') => {
     if (!rows || rows.length === 0) return null;
     return (
-      <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+      <div key={`${keyPrefix}-${groupCode}`} className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         {groupCode && (
           <div style={{
             padding: '8px 16px',
@@ -1513,37 +1999,6 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
         </button>
       </div>
 
-      {/* Group filter */}
-      {groupCodes.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setSelectedGroup(null)}
-            style={{
-              padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-              border: !selectedGroup ? '1px solid var(--round-btn-border-active)' : '1px solid var(--round-btn-border)',
-              background: !selectedGroup ? 'var(--round-btn-bg-active)' : 'var(--round-btn-bg)',
-              color: !selectedGroup ? 'var(--round-btn-text-active)' : 'var(--round-btn-text)',
-            }}
-          >
-            All Groups
-          </button>
-          {groupCodes.map(code => (
-            <button
-              key={code}
-              onClick={() => setSelectedGroup(code)}
-              style={{
-                padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                border: selectedGroup === code ? '1px solid var(--round-btn-border-active)' : '1px solid var(--round-btn-border)',
-                background: selectedGroup === code ? 'var(--round-btn-bg-active)' : 'var(--round-btn-bg)',
-                color: selectedGroup === code ? 'var(--round-btn-text-active)' : 'var(--round-btn-text)',
-              }}
-            >
-              Group {code}
-            </button>
-          ))}
-        </div>
-      )}
-
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
           <div className="spinner" />
@@ -1558,8 +2013,21 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
         </div>
       ) : (
         <div>
-          {isGrouped ? (
-            displayGroups.map(code => renderTable(leaderboard[code], code))
+          {categories.length > 0 ? (
+            categories.map(cat => (
+              <div key={cat.categoryId} style={{ marginBottom: 32 }}>
+                <h3 style={{
+                  fontSize: 16, fontWeight: 700, marginBottom: 16,
+                  paddingBottom: 8, borderBottom: '2px solid var(--border)',
+                  color: 'var(--text-primary)'
+                }}>
+                  {cat.categoryName}
+                </h3>
+                {cat.groups.map(g => renderTable(g.standings, g.code, cat.categoryId))}
+              </div>
+            ))
+          ) : isOldStyle ? (
+            oldStyleGroups.map(code => renderTable(leaderboard[code], code))
           ) : (
             renderTable(leaderboard, null)
           )}
@@ -1580,119 +2048,206 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
 }
 
 // ─── Bracket Tab (knockout visualization) ───────────────────────────────────────
-function BracketTab({ matches, isCommittee, onUpdate, showToast }) {
-  if (!matches || matches.length === 0) {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-        <p style={{ color: 'var(--text-muted)' }}>Knockout bracket will appear here after group stage completes.</p>
-      </div>
-    );
+function BracketTab({ tournament, groupCategories, matches, isCommittee, onUpdate, showToast }) {
+  const isPending = tournament.status === 'DRAFT' || tournament.currentStage === 'GROUP';
+  const bracketsByCategory = [];
+
+  // 1. Generate Placeholder Brackets
+  if ((isPending || matches.length === 0) && groupCategories && groupCategories.length > 0) {
+    groupCategories.forEach(cat => {
+      if (!cat.groups) return;
+      const gCodes = cat.groups.map(g => g.code).sort();
+      if (gCodes.length < 1) return; // Need at least 1 group
+
+      const qualifiers = [];
+      gCodes.forEach(code => {
+        qualifiers.push({ group: code, rank: 1 });
+        qualifiers.push({ group: code, rank: 2 });
+      });
+
+      const top = qualifiers.filter(q => q.rank === 1);
+      const bot = qualifiers.filter(q => q.rank === 2).reverse();
+      const seeded = [];
+      for (let i = 0; i < Math.max(top.length, bot.length); i++) {
+        if (i < top.length) seeded.push(top[i]);
+        if (i < bot.length) seeded.push(bot[i]);
+      }
+
+      const bracketSize = Math.pow(2, Math.ceil(Math.log2(seeded.length)));
+      while (seeded.length < bracketSize) {
+        seeded.push(null);
+      }
+
+      const rounds = [];
+      let currentRoundMatchCount = bracketSize / 2;
+      let roundNum = 1;
+
+      const LABELS = { 1: 'Final', 2: 'Semi-Finals', 4: 'Quarter-Finals', 8: 'Round of 16', 16: 'Round of 32' };
+
+      // Round 1
+      const r1 = [];
+      for (let i = 0; i < currentRoundMatchCount; i++) {
+        const h = seeded[i * 2];
+        const a = seeded[i * 2 + 1];
+        r1.push({
+          id: `cat-${cat.categoryId}-r1-m${i}`,
+          homeTeamName: h ? `Winner Grp ${h.group}` : 'BYE',
+          awayTeamName: a ? `Runner Up Grp ${a.group}` : 'BYE',
+          status: 'PENDING',
+          isPlaceholder: true
+        });
+      }
+      rounds.push({ label: LABELS[currentRoundMatchCount] || `Round of ${currentRoundMatchCount * 2}`, matches: r1 });
+
+      // Subsequent rounds
+      let prevCount = currentRoundMatchCount;
+      roundNum++;
+      while (prevCount > 1) {
+        let nextCount = prevCount / 2;
+        const rNext = [];
+        for (let i = 0; i < nextCount; i++) {
+          rNext.push({
+            id: `cat-${cat.categoryId}-r${roundNum}-m${i}`,
+            homeTeamName: 'TBD',
+            awayTeamName: 'TBD',
+            status: 'PENDING',
+            isPlaceholder: true
+          });
+        }
+        rounds.push({ label: LABELS[nextCount] || `Round of ${nextCount * 2}`, matches: rNext });
+        prevCount = nextCount;
+        roundNum++;
+      }
+
+      bracketsByCategory.push({
+        categoryId: cat.categoryId,
+        categoryName: cat.categoryName,
+        rounds: rounds
+      });
+    });
+  } else if (matches.length > 0) {
+    // 2. Generate Real Bracket from Matches
+    const catMap = {};
+    matches.forEach(m => {
+      const cid = m.categoryId || 1;
+      if (!catMap[cid]) catMap[cid] = {};
+      if (!catMap[cid][m.round]) catMap[cid][m.round] = [];
+      catMap[cid][m.round].push(m);
+    });
+
+    Object.keys(catMap).forEach(cidStr => {
+      const cid = parseInt(cidStr);
+      const catInfo = tournament?.categories?.find(c => c.id === cid);
+      const cName = catInfo ? catInfo.name : `Category ${cid}`;
+
+      const roundMap = catMap[cid];
+      const rounds = [];
+      const sortedRounds = Object.keys(roundMap).map(Number).sort((a, b) => a - b);
+
+      sortedRounds.forEach(r => {
+        const rMatches = roundMap[r].sort((a, b) => a.bracketPosition - b.bracketPosition);
+        const matchCount = rMatches.length;
+        const LABELS = { 1: 'Final', 2: 'Semi-Finals', 4: 'Quarter-Finals', 8: 'Round of 16', 16: 'Round of 32' };
+
+        rounds.push({
+          label: LABELS[matchCount] || `Round of ${matchCount * 2}`,
+          matches: rMatches
+        });
+      });
+
+      bracketsByCategory.push({
+        categoryId: cid,
+        categoryName: cName,
+        rounds: rounds
+      });
+    });
   }
-
-  // Group matches by round label (group_code = QF/SF/F/R16/etc.)
-  const byRound = {};
-  matches.forEach(m => {
-    const label = m.groupCode || `R${m.round}`;
-    if (!byRound[label]) byRound[label] = [];
-    byRound[label].push(m);
-  });
-
-  // Order: R32 → R16 → QF → SF → F
-  const ORDER = ['R32', 'R16', 'QF', 'SF', 'F'];
-  const LABELS = { R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarter-Finals', SF: 'Semi-Finals', F: 'Final' };
-  const roundLabels = Object.keys(byRound).sort((a, b) => {
-    const ai = ORDER.indexOf(a);
-    const bi = ORDER.indexOf(b);
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-  });
 
   return (
     <div>
-      <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>🏅 Knockout Bracket</h3>
-      <div style={{ display: 'flex', gap: 32, overflowX: 'auto', paddingBottom: 16, alignItems: 'flex-start' }}>
-        {roundLabels.map(label => (
-          <div key={label} style={{ minWidth: 280, flexShrink: 0 }}>
+      <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>🏅 Category Brackets</h3>
+
+      {bracketsByCategory.length === 0 ? (
+        <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+          {isPending
+            ? "Not enough groups to generate a knockout bracket."
+            : "No knockout matches found."}
+        </div>
+      ) : (
+        bracketsByCategory.map(bracket => (
+          <div key={bracket.categoryId} className="card" style={{ marginBottom: 32, padding: 24 }}>
             <h4 style={{
-              fontSize: 13, fontWeight: 700, marginBottom: 12,
-              padding: '4px 10px', borderRadius: 6,
-              background: label === 'F' ? 'rgba(250,204,21,0.15)' : 'rgba(139,92,246,0.1)',
-              color: label === 'F' ? '#ca8a04' : '#8b5cf6',
-              display: 'inline-block', textTransform: 'uppercase',
+              fontSize: 18, fontWeight: 700, marginBottom: 24,
+              color: 'var(--text-primary)', borderBottom: '2px solid var(--border)', paddingBottom: 12
             }}>
-              {LABELS[label] || label}
+              {bracket.categoryName} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>(Knockout Stage)</span>
             </h4>
-            <div style={{ display: 'grid', gap: 12 }}>
-              {byRound[label].map(match => {
-                const isBye = match.homeTeamName === match.awayTeamName && match.status === 'FINISHED';
-                return (
-                  <div
-                    key={match.id}
-                    className="card"
-                    style={{
-                      padding: 12, borderRadius: 10,
-                      border: match.status === 'FINISHED'
-                        ? '1px solid #22c55e'
-                        : match.status === 'ONGOING'
-                          ? '1px solid #f59e0b'
-                          : '1px solid var(--border)',
-                      opacity: isBye ? 0.6 : 1,
-                    }}
-                  >
-                    {isBye && (
-                      <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 4 }}>BYE</div>
-                    )}
-                    {/* Home team */}
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '6px 0',
-                      fontWeight: match.winnerTeamId === match.homeTeamId ? 700 : 400,
-                      color: match.winnerTeamId === match.homeTeamId ? '#22c55e' : 'currentColor',
-                    }}>
-                      <span style={{ fontSize: 13 }}>{match.homeTeam?.name || 'TBD'}</span>
-                      <span style={{ fontSize: 14, fontWeight: 700, minWidth: 20, textAlign: 'right' }}>
-                        {match.homeScore ?? '-'}
-                      </span>
-                    </div>
 
-                    <div style={{ borderTop: '1px solid var(--table-row-border)' }} />
-
-                    {/* Away team */}
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '6px 0',
-                      fontWeight: match.winnerTeamId === match.awayTeamId ? 700 : 400,
-                      color: match.winnerTeamId === match.awayTeamId ? '#22c55e' : 'currentColor',
-                    }}>
-                      <span style={{ fontSize: 13 }}>{match.awayTeam?.name || 'TBD'}</span>
-                      <span style={{ fontSize: 14, fontWeight: 700, minWidth: 20, textAlign: 'right' }}>
-                        {match.awayScore ?? '-'}
-                      </span>
-                    </div>
-
-                    {/* Status / Court */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 11, color: 'var(--text-faint)' }}>
-                      <StatusBadge status={match.status} />
-                      {match.courtName && <span>🏟 {match.courtName}</span>}
-                    </div>
-
-                    {/* Committee actions for scheduled knockout matches */}
-                    {isCommittee && match.status === 'SCHEDULED' && !isBye && (
-                      <div style={{ marginTop: 8 }}>
-                        <MatchCard
-                          match={match}
-                          isCommittee={isCommittee}
-                          onUpdate={onUpdate}
-                          showToast={showToast}
-                        />
-                      </div>
-                    )}
+            <div style={{ display: 'flex', gap: 40, overflowX: 'auto', paddingBottom: 16, paddingRight: 40 }}>
+              {bracket.rounds.map((roundObj, rIdx) => (
+                <div key={rIdx} style={{ display: 'flex', flexDirection: 'column', minWidth: 260, flexShrink: 0, justifyContent: 'space-around', position: 'relative' }}>
+                  <div style={{
+                    textAlign: 'center', fontWeight: 600, color: '#8b5cf6', marginBottom: 24,
+                    fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em'
+                  }}>
+                    {roundObj.label}
                   </div>
-                );
-              })}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24, flex: 1, justifyContent: 'space-around' }}>
+                    {roundObj.matches.map((match, mIdx) => {
+                      const isBye = match.homeTeamName === 'BYE' || match.awayTeamName === 'BYE' || match.homeTeamId === match.awayTeamId;
+
+                      return (
+                        <div key={match.id || mIdx} style={{
+                          position: 'relative',
+                          background: 'var(--bg-card)',
+                          border: match.isPlaceholder ? '1px dashed var(--border)' : '1px solid var(--border)',
+                          borderRadius: 8,
+                          padding: 12,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                        }}>
+                          {/* Top Team */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--bg-subtle)' }}>
+                            <span style={{ fontSize: 13, fontWeight: match.winnerTeamId === match.homeTeamId ? 700 : 500, color: match.isPlaceholder ? 'var(--text-faint)' : 'currentColor' }}>
+                              {match.homeTeam?.name || match.homeTeamName || 'TBD'}
+                            </span>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: match.winnerTeamId === match.homeTeamId ? '#16a34a' : 'currentColor' }}>
+                              {match.homeScore ?? '-'}
+                            </span>
+                          </div>
+                          {/* Bottom Team */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
+                            <span style={{ fontSize: 13, fontWeight: match.winnerTeamId === match.awayTeamId ? 700 : 500, color: match.isPlaceholder ? 'var(--text-faint)' : 'currentColor' }}>
+                              {match.awayTeam?.name || match.awayTeamName || 'TBD'}
+                            </span>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: match.winnerTeamId === match.awayTeamId ? '#16a34a' : 'currentColor' }}>
+                              {match.awayScore ?? '-'}
+                            </span>
+                          </div>
+
+                          {/* Match Info Box */}
+                          {!match.isPlaceholder && (
+                            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', alignItems: 'center' }}>
+                              <StatusBadge status={match.status} />
+                              {match.courtName && <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>🏟 Court {match.courtName}</span>}
+                            </div>
+                          )}
+
+                          {isCommittee && match.status === 'SCHEDULED' && !isBye && !match.isPlaceholder && (
+                            <div style={{ marginTop: 8 }}>
+                              <MatchCard match={match} isCommittee={isCommittee} onUpdate={onUpdate} showToast={showToast} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        ))
+      )}
     </div>
   );
 }
