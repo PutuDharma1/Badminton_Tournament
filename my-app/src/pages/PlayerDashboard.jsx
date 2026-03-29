@@ -340,9 +340,50 @@ function AvailableTournamentCard({ tournament, onRegister, isRegistering }) {
 // ─── Register Confirmation Modal ─────────────────────────────────────────────
 
 function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
-    // Filter categories based on user gender
-    const validCategories = (tournament.categories || []).filter(cat => 
-        cat.gender === 'MIXED' || (user?.gender && cat.gender.toUpperCase() === user.gender.toUpperCase())
+    // Calculate player's age from birth_date
+    const playerAge = (() => {
+        if (!user?.birthDate && !user?.birth_date) return null;
+        const bd = new Date(user.birthDate || user.birth_date);
+        const today = new Date();
+        let age = today.getFullYear() - bd.getFullYear();
+        if (today.getMonth() < bd.getMonth() || (today.getMonth() === bd.getMonth() && today.getDate() < bd.getDate())) {
+            age--;
+        }
+        return age;
+    })();
+
+    // Helper: check if player age is eligible for a category
+    const isAgeEligible = (cat) => {
+        // OPEN or no age bounds: anyone can join
+        if (cat.minAge == null && cat.maxAge == null) return true;
+        if (cat.minAge === 0 && cat.maxAge === 200) return true;
+        // If player age is unknown, allow (will be validated server-side)
+        if (playerAge === null) return true;
+        return playerAge >= (cat.minAge || 0) && playerAge < (cat.maxAge || 200);
+    };
+
+    // Helper: get age group label from category
+    const getAgeGroupLabel = (cat) => {
+        if (cat.minAge == null && cat.maxAge == null) return 'OPEN';
+        if (cat.minAge === 0 && cat.maxAge === 200) return 'OPEN';
+        if (cat.maxAge === 11) return 'U11';
+        if (cat.maxAge === 13) return 'U13';
+        if (cat.maxAge === 15) return 'U15';
+        if (cat.maxAge === 17) return 'U17';
+        if (cat.maxAge === 19) return 'U19';
+        return cat.minAge != null ? `${cat.minAge}-${cat.maxAge}` : 'OPEN';
+    };
+
+    // Filter categories: gender match + age eligibility
+    const validCategories = (tournament.categories || []).filter(cat =>
+        (cat.gender === 'MIXED' || (user?.gender && cat.gender.toUpperCase() === user.gender.toUpperCase()))
+        && isAgeEligible(cat)
+    );
+
+    // Categories that match gender but NOT age (for info display)
+    const ageBlockedCategories = (tournament.categories || []).filter(cat =>
+        (cat.gender === 'MIXED' || (user?.gender && cat.gender.toUpperCase() === user.gender.toUpperCase()))
+        && !isAgeEligible(cat)
     );
 
     const isCatFull = (cat) => cat.maxParticipants && (cat.participantCount || 0) >= cat.maxParticipants;
@@ -443,6 +484,18 @@ function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
                     </div>
                 </div>
 
+                {/* Player age info */}
+                {playerAge !== null && (
+                    <div style={{
+                        padding: '10px 14px', borderRadius: 8, marginBottom: 16,
+                        background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)',
+                    }}>
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                            🎂 Umur kamu: <strong style={{ color: '#60a5fa' }}>{playerAge} tahun</strong>
+                        </p>
+                    </div>
+                )}
+
                 {validCategories.length > 0 ? (
                     <>
                         {/* Category selector */}
@@ -458,9 +511,10 @@ function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
                             >
                                 {validCategories.map(cat => {
                                     const full = isCatFull(cat);
+                                    const ageLabel = getAgeGroupLabel(cat);
                                     return (
                                         <option key={cat.id} value={cat.id} disabled={full}>
-                                            {cat.name} ({cat.gender} • {cat.categoryType})
+                                            {cat.name} ({cat.gender} • {cat.categoryType} • {ageLabel})
                                             {cat.maxParticipants ? ` — ${cat.participantCount || 0}/${cat.maxParticipants}` : ''}
                                             {full ? ' [FULL]' : ''}
                                         </option>
@@ -473,6 +527,19 @@ function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
                                 </p>
                             )}
                         </div>
+
+                        {/* Age-blocked categories info */}
+                        {ageBlockedCategories.length > 0 && (
+                            <div style={{
+                                padding: '8px 12px', borderRadius: 8, marginBottom: 16,
+                                background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.3)',
+                            }}>
+                                <p style={{ fontSize: 11, color: '#f97316', margin: 0 }}>
+                                    ⚠️ {ageBlockedCategories.length} kategori tidak ditampilkan karena tidak sesuai umur ({playerAge} tahun):
+                                    {' '}{ageBlockedCategories.map(c => getAgeGroupLabel(c)).join(', ')}
+                                </p>
+                            </div>
+                        )}
 
                         {/* Partner email section for DOUBLES */}
                         {isDoubles && (
@@ -573,7 +640,10 @@ function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
                 ) : (
                     <div className="alert-error" style={{ marginBottom: 20 }}>
                         <p style={{ margin: 0, fontSize: 13 }}>
-                            There are no suitable categories available for your gender ({user?.gender || 'Unknown'}).
+                            {ageBlockedCategories.length > 0
+                                ? `Tidak ada kategori yang sesuai untuk umur kamu (${playerAge} tahun) dan gender (${user?.gender || 'Unknown'}). Kategori yang tersedia membutuhkan kelompok umur: ${ageBlockedCategories.map(c => getAgeGroupLabel(c)).join(', ')}.`
+                                : `There are no suitable categories available for your gender (${user?.gender || 'Unknown'}).`
+                            }
                         </p>
                     </div>
                 )}

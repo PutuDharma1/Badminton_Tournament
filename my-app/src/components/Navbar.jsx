@@ -58,19 +58,23 @@ const Navbar = () => {
       COMMITTEE: [
         { path: '/committee', label: 'Dashboard' },
         { path: '/matches', label: 'Matches' },
+        { path: '/brackets', label: 'Brackets' },
         { path: '/settings', label: 'Settings' },
       ],
       PLAYER: [
         { path: '/player', label: 'My Dashboard' },
         { path: '/matches', label: 'My Matches' },
+        { path: '/brackets', label: 'Brackets' },
       ],
       REFEREE: [
         { path: '/referee', label: 'Dashboard' },
         { path: '/matches', label: 'Matches' },
+        { path: '/brackets', label: 'Brackets' },
       ],
       ADMIN: [
         { path: '/', label: 'Dashboard' },
         { path: '/matches', label: 'Matches' },
+        { path: '/brackets', label: 'Brackets' },
         { path: '/players', label: 'Players' },
         { path: '/settings', label: 'Settings' },
       ],

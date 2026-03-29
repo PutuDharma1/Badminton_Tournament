@@ -20,6 +20,12 @@ def get_tournament_categories(tournament_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@category_blueprint.route('/age-groups', methods=['GET'])
+def get_age_groups():
+    """Return available PBSI age groups for the frontend dropdown."""
+    from services.age_rules import AGE_GROUPS
+    return jsonify(AGE_GROUPS), 200
+
 @category_blueprint.route('/', methods=['POST'])
 def create_category():
     data = request.get_json()
@@ -33,13 +39,25 @@ def create_category():
         if not tournament:
             return jsonify({"error": "Tournament not found"}), 404
 
+        # If ageGroup is provided, auto-fill min_age / max_age from rules
+        age_group = data.get('ageGroup')
+        min_age = data.get('minAge')
+        max_age = data.get('maxAge')
+
+        if age_group:
+            from services.age_rules import AGE_GROUP_MAP
+            if age_group in AGE_GROUP_MAP:
+                min_age, max_age = AGE_GROUP_MAP[age_group]
+            else:
+                return jsonify({"error": f"Unknown age group: {age_group}"}), 400
+
         new_cat = Category(
             name=data['name'],
             gender=data['gender'],
             level=data['level'],
             category_type=data.get('categoryType', 'SINGLE'),
-            min_age=data.get('minAge'),
-            max_age=data.get('maxAge'),
+            min_age=min_age,
+            max_age=max_age,
             max_participants=data.get('maxParticipants'),
             tournament_id=data['tournamentId']
         )

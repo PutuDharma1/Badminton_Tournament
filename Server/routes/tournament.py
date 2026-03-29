@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Tournament, Category, Match, Participant, Team
-from datetime import datetime
+from datetime import datetime, timedelta
 from routes.schedule import generate_round_robin_matches, generate_knockout_bracket, advance_knockout
 
 tournament_blueprint = Blueprint('tournament', __name__, url_prefix='/api/tournaments')
@@ -554,4 +554,160 @@ def generate_knockout(id):
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
         db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Knockout schedule preview — predicted times + courts for placeholder bracket
+# ──────────────────────────────────────────────────────────────────────────────
+
+@tournament_blueprint.route('/<int:id>/knockout-preview', methods=['GET'])
+def knockout_preview(id):
+    """
+    Return pre-calculated knockout schedule: times + courts for each bracket slot,
+    even before knockout actually starts. Used by Brackets page for placeholder display.
+    """
+    from models import Court, Team
+    from routes.schedule import resolve_slot, _parse_hhmm
+    import math
+
+    try:
+        tournament = Tournament.query.get(id)
+        if not tournament:
+            return jsonify({"error": "Tournament not found"}), 404
+
+        MATCH_DUR = int(tournament.match_duration_minutes or 40)
+        DAILY_START = tournament.daily_start_time or '09:00'
+        DAILY_END = tournament.daily_end_time or '18:00'
+        BREAK_START = tournament.break_start_time or None
+        BREAK_END = tournament.break_end_time or None
+
+        courts = Court.query.filter_by(tournament_id=id).order_by(Court.id).all()
+        if not courts:
+            return jsonify({"error": "No courts configured"}), 400
+
+        court_list = [{"id": c.id, "name": c.name} for c in courts]
+
+        # Find when knockout would start (day after last group match, or start_date)
+        last_group = (
+            Match.query
+            .filter_by(tournament_id=id, stage='GROUP')
+            .order_by(Match.scheduled_at.desc())
+            .first()
+        )
+        if last_group and last_group.scheduled_at:
+            ko_start_date = (last_group.scheduled_at + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+        else:
+            ko_start_date = (tournament.start_date or datetime.now()).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+
+        base_start = _parse_hhmm(DAILY_START, ko_start_date)
+
+        # Get teams grouped by category
+        teams = Team.query.filter_by(tournament_id=id).all()
+        cat_teams = {}
+        for t in teams:
+            cat_id = t.category_id or 0
+            cat_teams.setdefault(cat_id, []).append(t)
+
+        LABELS = {1: 'F', 2: 'SF', 4: 'QF', 8: 'R16', 16: 'R32'}
+
+        # Track court availability across all categories
+        court_available = {c.id: base_start for c in courts}
+        match_dur_td = timedelta(minutes=MATCH_DUR)
+
+        result = {}  # { categoryId: { rounds: [ { round, label, matches: [{pos, time, courtId, courtName}] } ] } }
+
+        for cat_id, t_list in sorted(cat_teams.items()):
+            group_codes = sorted(set(t.group_code for t in t_list if t.group_code))
+            if len(group_codes) < 1:
+                continue
+
+            # Calculate qualifier count: 2 per group
+            n_qualifiers = len(group_codes) * 2
+            if n_qualifiers < 2:
+                continue
+
+            bracket_size = 1
+            while bracket_size < n_qualifiers:
+                bracket_size *= 2
+
+            # Build all rounds
+            rounds_data = []
+            current_size = bracket_size // 2
+            round_num = 1
+
+            while current_size >= 1:
+                label = LABELS.get(current_size, f'R{current_size * 2}')
+                if current_size == 1:
+                    label = 'F'
+
+                matches_in_round = []
+                for pos in range(current_size):
+                    # Find earliest available court
+                    best_court_id = min(court_available, key=court_available.get)
+                    raw_time = court_available[best_court_id]
+                    slot_time = resolve_slot(raw_time, DAILY_START, DAILY_END, BREAK_START, BREAK_END)
+
+                    court_info = next(c for c in court_list if c['id'] == best_court_id)
+
+                    # For first round, calculate placeholder names
+                    if round_num == 1:
+                        # Seeding: position i*2 and i*2+1 from the seeded list
+                        # A1 vs last-group's #2, etc.
+                        seeds_top = [{'group': g, 'rank': 1} for g in group_codes]
+                        seeds_bot = [{'group': g, 'rank': 2} for g in reversed(group_codes)]
+                        seeded = []
+                        for i in range(max(len(seeds_top), len(seeds_bot))):
+                            if i < len(seeds_top):
+                                seeded.append(seeds_top[i])
+                            if i < len(seeds_bot):
+                                seeded.append(seeds_bot[i])
+                        while len(seeded) < bracket_size:
+                            seeded.append(None)
+
+                        h = seeded[pos * 2] if pos * 2 < len(seeded) else None
+                        a = seeded[pos * 2 + 1] if pos * 2 + 1 < len(seeded) else None
+                        home_label = f"Winner Grp {h['group']}" if h else 'BYE'
+                        away_label = f"Runner Up Grp {a['group']}" if a else 'BYE'
+                    else:
+                        home_label = 'TBD'
+                        away_label = 'TBD'
+
+                    matches_in_round.append({
+                        'position': pos + 1,
+                        'scheduledAt': slot_time.isoformat(),
+                        'courtId': best_court_id,
+                        'courtName': court_info['name'],
+                        'homeLabel': home_label,
+                        'awayLabel': away_label,
+                    })
+
+                    court_available[best_court_id] = slot_time + match_dur_td
+
+                rounds_data.append({
+                    'round': round_num,
+                    'label': label,
+                    'matchCount': current_size,
+                    'matches': matches_in_round,
+                })
+
+                current_size //= 2
+                round_num += 1
+
+            cat_obj = Category.query.get(cat_id)
+            cat_name = cat_obj.name if cat_obj else f'Category {cat_id}'
+
+            result[str(cat_id)] = {
+                'categoryId': cat_id,
+                'categoryName': cat_name,
+                'rounds': rounds_data,
+            }
+
+        return jsonify(result), 200
+
+    except Exception as e:
         return jsonify({"error": str(e)}), 500

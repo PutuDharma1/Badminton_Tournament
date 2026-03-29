@@ -10,6 +10,7 @@ import CommitteeDashboard from './pages/CommitteeDashboard.jsx'
 import Profile from './pages/Profile.jsx'
 import Peserta from './pages/Peserta.jsx'
 import Matches from './pages/Matches.jsx'
+import Brackets from './pages/Brackets.jsx'
 import Wasit from './pages/Wasit.jsx'
 import Settings from './pages/Settings.jsx'
 import Homepage from './pages/Homepage.jsx'
@@ -78,6 +79,10 @@ const router = createBrowserRouter([
       {
         path: "/matches",
         element: <Matches />,
+      },
+      {
+        path: "/brackets",
+        element: <Brackets />,
       },
       {
         path: "/referee",

@@ -25,12 +25,18 @@ def resolve_slot(
 ) -> datetime:
     """
     Given a candidate slot time `t`, return the earliest legal slot considering:
-      1. Break window  — if t falls inside [break_start, break_end), advance to break_end
-      2. Day boundary  — if t is past daily_end, roll over to next day at daily_start
+      1. Before daily_start — advance to daily_start on the same day
+      2. Break window  — if t falls inside [break_start, break_end), advance to break_end
+      3. Day boundary  — if t is past daily_end, roll over to next day at daily_start
     """
     for _ in range(10):
         end_dt   = _parse_hhmm(daily_end,   t)
         start_dt = _parse_hhmm(daily_start, t)
+
+        # Too early — push to daily start
+        if t < start_dt:
+            t = start_dt
+            continue
 
         if t >= end_dt:
             t = start_dt + timedelta(days=1)
@@ -298,6 +304,32 @@ def generate_round_robin_matches(tournament_id, category_id=None):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Court availability helper — queries DB for real court availability
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _get_court_availability(tournament_id, courts, match_duration, base_fallback):
+    """
+    Query the DB to find when each court is next available, based on
+    the latest scheduled/ongoing match on that court.
+    Returns dict { court_id: earliest_available_datetime }.
+    """
+    availability = {}
+    for court in courts:
+        latest_match = (
+            Match.query
+            .filter_by(tournament_id=tournament_id, court_id=court.id)
+            .filter(Match.status.in_(['SCHEDULED', 'IN_PROGRESS', 'FINISHED']))
+            .order_by(Match.scheduled_at.desc())
+            .first()
+        )
+        if latest_match and latest_match.scheduled_at:
+            availability[court.id] = latest_match.scheduled_at + match_duration
+        else:
+            availability[court.id] = base_fallback
+    return availability
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Knockout bracket generation
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -366,9 +398,11 @@ def generate_knockout_bracket(tournament_id):
         ko_start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
     base_start = _parse_hhmm(DAILY_START, ko_start_date)
-    court_available = {c.id: base_start for c in courts}
     if not courts:
         court_available = {1: base_start}
+    else:
+        # Seed court availability from DB to avoid conflicts with existing matches
+        court_available = _get_court_availability(tournament_id, courts, MATCH_DURATION, base_start)
 
     round_labels = {
         2: 'F',
@@ -536,10 +570,24 @@ def advance_knockout(tournament_id, finished_match):
         finished_match.finished_at or datetime.now(),
         sibling.finished_at or datetime.now()
     )
-    t_slot = latest_finish + timedelta(minutes=30)
+    earliest_wanted = latest_finish + timedelta(minutes=30)
 
-    best_court = courts[0].id if courts else None
-    t_slot = resolve_slot(t_slot, DAILY_START, DAILY_END, BREAK_START, BREAK_END)
+    # Find the court with the earliest available slot (query DB for real availability)
+    if courts:
+        court_available = _get_court_availability(tournament_id, courts, MATCH_DURATION, earliest_wanted)
+        # Pick the court that is available earliest, but not before earliest_wanted
+        best_court = None
+        best_time = None
+        for court_id, avail_time in court_available.items():
+            candidate = max(avail_time, earliest_wanted)
+            candidate = resolve_slot(candidate, DAILY_START, DAILY_END, BREAK_START, BREAK_END)
+            if best_time is None or candidate < best_time:
+                best_time = candidate
+                best_court = court_id
+        t_slot = best_time
+    else:
+        best_court = None
+        t_slot = resolve_slot(earliest_wanted, DAILY_START, DAILY_END, BREAK_START, BREAK_END)
 
     # Assign correct home/away based on bracket position
     if pos % 2 == 1:

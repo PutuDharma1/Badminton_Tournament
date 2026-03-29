@@ -5,6 +5,7 @@ from models import Participant, TeamParticipant, Team, User, Tournament, Categor
 from datetime import datetime
 import random
 from faker import Faker
+from services.age_rules import calculate_age, is_age_eligible
 
 participant_blueprint = Blueprint('participant', __name__, url_prefix='/api/participants')
 fake = Faker('id_ID')
@@ -59,6 +60,27 @@ def create_participant():
                     g2 = data['player2']['gender'].upper()
                     if g2 != c_gender:
                         return jsonify({"error": f"Player 2 gender ({g2}) does not match category requirement ({c_gender})"}), 400
+
+            # ── Validate age ──────────────────────────────────────────────
+            if category:
+                def _check_age(player_data, label):
+                    try:
+                        bd = datetime.fromisoformat(player_data['birthDate'].replace('Z', '+00:00')).date()
+                    except Exception:
+                        bd = datetime.strptime(player_data['birthDate'][:10], '%Y-%m-%d').date()
+                    age = calculate_age(bd)
+                    if not is_age_eligible(age, category.min_age, category.max_age):
+                        age_range = f"{category.min_age}-{category.max_age}" if category.min_age is not None else "any"
+                        return jsonify({"error": f"{label} age ({age}) does not meet category requirement (age range {age_range})"}), 400
+                    return None
+
+                err = _check_age(p1_data, "Player 1")
+                if err:
+                    return err
+                if is_double:
+                    err = _check_age(data['player2'], "Player 2")
+                    if err:
+                        return err
 
             # Check capacity
             if category and category.max_participants:
@@ -260,6 +282,13 @@ def self_register():
             if category.gender != 'MIXED' and user.gender and user.gender.upper() != category.gender.upper():
                 return jsonify({"error": f"You cannot register for this category. Category requires {category.gender} but your gender is {user.gender}"}), 400
 
+            # ── Validate age ──────────────────────────────────────────────
+            if user.birth_date:
+                player_age = calculate_age(user.birth_date.date() if hasattr(user.birth_date, 'date') else user.birth_date)
+                if not is_age_eligible(player_age, category.min_age, category.max_age):
+                    age_range = f"{category.min_age}-{category.max_age}" if category.min_age is not None else "any"
+                    return jsonify({"error": f"Your age ({player_age}) does not meet the category requirement (age range {age_range}). Please choose a suitable category."}), 400
+
             # Check capacity
             if category.max_participants:
                 current_count = Team.query.filter_by(category_id=int(category_id)).count()
@@ -300,6 +329,13 @@ def self_register():
             # Validate partner gender for non-MIXED categories
             if category and category.gender != 'MIXED' and partner_user.gender and partner_user.gender.upper() != category.gender.upper():
                 return jsonify({"error": f"Partner's gender ({partner_user.gender}) does not match category requirement ({category.gender})"}), 400
+
+            # Validate partner age
+            if category and partner_user.birth_date:
+                partner_age = calculate_age(partner_user.birth_date.date() if hasattr(partner_user.birth_date, 'date') else partner_user.birth_date)
+                if not is_age_eligible(partner_age, category.min_age, category.max_age):
+                    age_range = f"{category.min_age}-{category.max_age}" if category.min_age is not None else "any"
+                    return jsonify({"error": f"Partner's age ({partner_age}) does not meet the category requirement (age range {age_range})."}), 400
 
         # ── Create participant(s) ─────────────────────────────────────────
         new_participant = Participant(

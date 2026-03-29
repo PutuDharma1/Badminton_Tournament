@@ -6,6 +6,7 @@ import matchesApi from '../api/matches';
 import participantsApi from '../api/participants';
 import authApi from '../api/auth';
 import { categoriesApi } from '../api/categories';
+import apiClient from '../api/client';
 import Toast from '../components/Toast';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -377,7 +378,7 @@ function TournamentManagement() {
               {tournament.categories?.length > 0 ? (
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Categories: </span>
-                  {tournament.categories.map(c => `${c.name} (${c.categoryType})`).join(', ')}
+                  {tournament.categories.map(c => c.name).join(', ')}
                 </div>
               ) : (
                 <div>
@@ -1428,15 +1429,31 @@ function EditTournamentModal({ tournament, onClose, onSave }) {
 function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [ageGroups, setAgeGroups] = useState([]);
   const [formData, setFormData] = useState({
-    name: '',
-    gender: 'MIXED',
-    level: 'OPEN',
+    gender: 'MALE',
     categoryType: 'SINGLE',
-    minAge: '',
-    maxAge: '',
+    ageGroup: '',
     maxParticipants: ''
   });
+
+  // Fetch age groups on mount
+  useEffect(() => {
+    categoriesApi.getAgeGroups()
+      .then(data => {
+        setAgeGroups(data);
+        if (data.length > 0) setFormData(prev => ({ ...prev, ageGroup: data[0].name }));
+      })
+      .catch(err => console.error('Failed to fetch age groups:', err));
+  }, []);
+
+  // Auto-generate category name from selections
+  const generateName = (data) => {
+    const genderLabel = { MALE: "Men's", FEMALE: "Women's", MIXED: "Mixed" }[data.gender] || data.gender;
+    const typeLabel = data.categoryType === 'DOUBLE' ? 'Doubles' : 'Singles';
+    const ageLabel = data.ageGroup || '';
+    return `${ageLabel} ${genderLabel} ${typeLabel}`.trim();
+  };
 
   const handleDelete = async (catId) => {
     if (!window.confirm("Are you sure you want to delete this category?")) return;
@@ -1454,21 +1471,25 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
     e.preventDefault();
     setError('');
     
-    if (!formData.name) {
-      setError('Category name is required.');
+    if (!formData.ageGroup) {
+      setError('Please select an age group.');
       return;
     }
+
+    const name = generateName(formData);
 
     try {
       setLoading(true);
       await categoriesApi.create({
-        ...formData,
-        tournamentId: tournament.id,
-        minAge: formData.minAge ? parseInt(formData.minAge) : null,
-        maxAge: formData.maxAge ? parseInt(formData.maxAge) : null,
+        name,
+        gender: formData.gender,
+        level: 'OPEN',
+        categoryType: formData.categoryType,
+        ageGroup: formData.ageGroup,
         maxParticipants: formData.maxParticipants ? parseInt(formData.maxParticipants) : null,
+        tournamentId: tournament.id,
       });
-      setFormData({ name: '', gender: 'MIXED', level: 'OPEN', categoryType: 'SINGLE', minAge: '', maxAge: '', maxParticipants: '' });
+      setFormData(prev => ({ ...prev, maxParticipants: '' }));
       onSuccess();
     } catch (err) {
       setError(err.message || 'Failed to create category');
@@ -1477,17 +1498,28 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
     }
   };
 
+  // Helper: get age group info from category's minAge/maxAge
+  const getAgeGroupLabel = (cat) => {
+    if (cat.minAge == null && cat.maxAge == null) return 'OPEN';
+    if (cat.minAge === 0 && cat.maxAge === 200) return 'OPEN';
+    const match = ageGroups.find(ag => ag.minAge === cat.minAge && ag.maxAge === cat.maxAge);
+    return match ? match.name : (cat.minAge != null ? `${cat.minAge}-${cat.maxAge}` : '');
+  };
+
+  const previewName = generateName(formData);
+  const selectedAgeGroup = ageGroups.find(ag => ag.name === formData.ageGroup);
+
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
         background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24,
-        maxWidth: 500, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000,
+        maxWidth: 520, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000,
       }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Manage Categories</h2>
         <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>
-          Create and manage categories like Men's Singles or Mixed Doubles.
+          Create categories by selecting age group, gender, and format type.
         </p>
 
         {error && (
@@ -1507,9 +1539,18 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
                 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
-                      {c.gender} • {c.categoryType}
-                      {c.maxParticipants ? ` • ${c.participantCount || 0}/${c.maxParticipants} slots` : ''}
+                    <div style={{ fontSize: 12, color: 'var(--text-faint)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 }}>
+                      <span style={{
+                        padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                        background: getAgeGroupLabel(c) === 'OPEN' ? 'rgba(34,197,94,0.15)' : 'rgba(96,165,250,0.15)',
+                        color: getAgeGroupLabel(c) === 'OPEN' ? '#22c55e' : '#60a5fa',
+                        border: `1px solid ${getAgeGroupLabel(c) === 'OPEN' ? '#22c55e' : '#60a5fa'}`,
+                      }}>{getAgeGroupLabel(c)}</span>
+                      <span>•</span>
+                      <span>{c.gender}</span>
+                      <span>•</span>
+                      <span>{c.categoryType}</span>
+                      {c.maxParticipants ? <><span>•</span><span>{c.participantCount || 0}/{c.maxParticipants} slots</span></> : null}
                     </div>
                   </div>
                   <button
@@ -1529,12 +1570,31 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
 
         <form onSubmit={handleCreate}>
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--text-faint)' }}>Add New Category</h3>
-          <div className="form-group">
-            <label className="form-label">Category Name *</label>
-            <input type="text" className="form-input" placeholder="e.g. Men's Doubles Open"
-              value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} disabled={loading} />
-          </div>
           
+          {/* Age Group Selector */}
+          <div className="form-group">
+            <label className="form-label">Age Group *</label>
+            <select className="form-input" value={formData.ageGroup}
+              onChange={e => setFormData({...formData, ageGroup: e.target.value})} disabled={loading}>
+              {ageGroups.map(ag => (
+                <option key={ag.name} value={ag.name}>
+                  {ag.name} — {ag.label}
+                  {ag.name !== 'OPEN' ? ` (umur ${ag.minAge}–${ag.maxAge - 1} tahun)` : ''}
+                </option>
+              ))}
+            </select>
+            {selectedAgeGroup && selectedAgeGroup.name !== 'OPEN' && (
+              <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
+                ℹ️ Peserta harus berumur {selectedAgeGroup.minAge}–{selectedAgeGroup.maxAge - 1} tahun
+              </p>
+            )}
+            {selectedAgeGroup && selectedAgeGroup.name === 'OPEN' && (
+              <p style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>
+                ✅ Semua umur bisa mendaftar
+              </p>
+            )}
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="form-group">
               <label className="form-label">Format Type</label>
@@ -1559,6 +1619,16 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
               <input type="number" className="form-input" placeholder="e.g. 16 (empty = unlimited)"
                 value={formData.maxParticipants} onChange={e => setFormData({...formData, maxParticipants: e.target.value})} disabled={loading} min="2" />
             </div>
+          </div>
+
+          {/* Preview */}
+          <div style={{
+            padding: '10px 14px', borderRadius: 8, marginBottom: 12,
+            background: 'var(--status-scheduled-bg)', border: '1px solid var(--status-scheduled-border)',
+          }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+              📋 Category name: <strong style={{ color: 'var(--text)' }}>{previewName}</strong>
+            </p>
           </div>
           
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -2049,6 +2119,21 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
 
 // ─── Bracket Tab (knockout visualization) ───────────────────────────────────────
 function BracketTab({ tournament, groupCategories, matches, isCommittee, onUpdate, showToast }) {
+  const [knockoutPreview, setKnockoutPreview] = useState(null);
+
+  // Fetch knockout schedule preview (times + courts)
+  useEffect(() => {
+    if (!tournament?.id) return;
+    (async () => {
+      try {
+        const data = await apiClient.get(`/api/tournaments/${tournament.id}/knockout-preview`);
+        setKnockoutPreview(data);
+      } catch {
+        setKnockoutPreview(null);
+      }
+    })();
+  }, [tournament?.id]);
+
   const isPending = tournament.status === 'DRAFT' || tournament.currentStage === 'GROUP';
   const bracketsByCategory = [];
 
@@ -2057,7 +2142,7 @@ function BracketTab({ tournament, groupCategories, matches, isCommittee, onUpdat
     groupCategories.forEach(cat => {
       if (!cat.groups) return;
       const gCodes = cat.groups.map(g => g.code).sort();
-      if (gCodes.length < 1) return; // Need at least 1 group
+      if (gCodes.length < 1) return;
 
       const qualifiers = [];
       gCodes.forEach(code => {
@@ -2125,6 +2210,24 @@ function BracketTab({ tournament, groupCategories, matches, isCommittee, onUpdat
         rounds: rounds
       });
     });
+
+    // Merge knockout-preview schedule data into placeholders
+    if (knockoutPreview) {
+      bracketsByCategory.forEach(bracket => {
+        const preview = knockoutPreview[String(bracket.categoryId)];
+        if (!preview) return;
+        bracket.rounds.forEach((roundObj, rIdx) => {
+          const previewRound = preview.rounds[rIdx];
+          if (!previewRound) return;
+          roundObj.matches.forEach((match, mIdx) => {
+            const previewMatch = previewRound.matches[mIdx];
+            if (!previewMatch) return;
+            match.scheduledAt = previewMatch.scheduledAt;
+            match.courtName = previewMatch.courtName;
+          });
+        });
+      });
+    }
   } else if (matches.length > 0) {
     // 2. Generate Real Bracket from Matches
     const catMap = {};
@@ -2225,11 +2328,27 @@ function BracketTab({ tournament, groupCategories, matches, isCommittee, onUpdat
                             </span>
                           </div>
 
-                          {/* Match Info Box */}
-                          {!match.isPlaceholder && (
+                          {/* Schedule & Court Info — shown for both placeholders and real matches */}
+                          {(match.scheduledAt || match.courtName || (!match.isPlaceholder && match.status)) && (
                             <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', alignItems: 'center' }}>
-                              <StatusBadge status={match.status} />
-                              {match.courtName && <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>🏟 Court {match.courtName}</span>}
+                              {match.isPlaceholder
+                                ? <span style={{ fontSize: 10, color: 'var(--text-faint)', fontStyle: 'italic' }}>Jadwal Prediksi</span>
+                                : <StatusBadge status={match.status} />
+                              }
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                {match.courtName && (
+                                  <span style={{ fontWeight: 600, fontSize: 11, color: match.isPlaceholder ? 'var(--text-faint)' : 'var(--text-primary)' }}>
+                                    🏟 {match.courtName}
+                                  </span>
+                                )}
+                                {match.scheduledAt && (
+                                  <span style={{ fontSize: 10, color: match.isPlaceholder ? 'var(--text-faint)' : 'var(--text-muted)' }}>
+                                    {new Date(match.scheduledAt).toLocaleString('id-ID', {
+                                      weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                                    })}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           )}
 
