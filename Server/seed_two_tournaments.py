@@ -16,7 +16,7 @@ from models import (
     Match, MatchSet, Court
 )
 from services.age_rules import CATEGORY_RULES, AGE_GROUP_MAP
-from routes.schedule import resolve_slot
+from routes.schedule import resolve_slot, pre_generate_knockout_matches
 from datetime import datetime, timedelta
 import random
 import math
@@ -146,6 +146,19 @@ CATEGORY_TEMPLATES = [
 
 def run():
     with app.app_context():
+        # --- Clean up old dummy data ---
+        print("Cleaning up old dummy data...")
+        MatchSet.query.delete()
+        Match.query.delete()
+        TeamParticipant.query.delete()
+        Team.query.delete()
+        Court.query.delete()
+        Participant.query.delete()
+        Category.query.delete()
+        Tournament.query.delete()
+        db.session.commit()
+        print("Old data deleted!\n")
+
         admin = User.query.filter_by(role='COMMITTEE').first()
         if not admin:
             print("ERROR: No COMMITTEE user found. Run seed.py first.")
@@ -156,7 +169,7 @@ def run():
         # ═══════════════════════════════════════════════════════════════
         # Tournament 1: DRAFT — Ready to START Round-Robin
         # ═══════════════════════════════════════════════════════════════
-        print("\n" + "=" * 70)
+        print("=" * 70)
         print(" Creating Tournament 1: Siap di-Start Round-Robin")
         print("=" * 70)
 
@@ -256,6 +269,7 @@ def run():
         BREAK_END = "13:00"
 
         court_available = {c.id: datetime(2026, 3, 20, 9, 0) for c in courts2}
+        groups_by_cat = {}
 
         for age_group in AGE_GROUPS_TO_USE:
             for cat_type, gender in CATEGORY_TEMPLATES:
@@ -286,6 +300,7 @@ def run():
                 # Assign groups
                 random.shuffle(teams)
                 groups = assign_groups(teams, target_size=4)
+                groups_by_cat[cat.id] = groups
                 for code, grp_teams in groups.items():
                     for team in grp_teams:
                         team.group_code = code
@@ -351,6 +366,13 @@ def run():
                 print(f"  ✅ {cat_name}: 8 players, {cat_matches} matches (all FINISHED)")
 
         db.session.commit()
+        
+        # Pre-generate knockout placeholder matches because T2 is 'ONGOING' and ready for knockout!
+        ko_matches = pre_generate_knockout_matches(t2.id, court_available, groups_by_cat)
+        if ko_matches:
+            db.session.add_all(ko_matches)
+            db.session.commit()
+            print(f"  ✅ Pre-generated {len(ko_matches)} knockout placeholder matches!")
 
         print(f"\n  📊 Total: {total_players_t2} players, {total_matches_t2} matches")
         print(f"  🏟️  Tournament ID: {t2.id} — Status: ONGOING — Ready for Knockout!\n")

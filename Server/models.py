@@ -192,9 +192,11 @@ class Match(db.Model):
     tournament_id = db.Column(db.Integer, db.ForeignKey('Tournament.id'), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('Category.id'), nullable=False)
     court_id = db.Column(db.Integer, db.ForeignKey('Court.id'), nullable=True)
-    home_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=False)
-    away_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=False)
+    home_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=True)
+    away_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=True)
     winner_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=True)
+    home_placeholder = db.Column(db.String(100), nullable=True)  # e.g. "Winner Grp A"
+    away_placeholder = db.Column(db.String(100), nullable=True)  # e.g. "Runner Up Grp B"
     retire_team_id = db.Column(db.Integer, db.ForeignKey('Team.id'), nullable=True)  # team that retired/walked out
     finish_reason = db.Column(db.String(20), nullable=True)  # NORMAL, RETIRE, WALKOVER
     referee_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
@@ -230,6 +232,8 @@ class Match(db.Model):
             "homeTeamId": self.home_team_id,
             "awayTeamId": self.away_team_id,
             "winnerTeamId": self.winner_team_id,
+            "homePlaceholder": self.home_placeholder,
+            "awayPlaceholder": self.away_placeholder,
             "refereeId": self.referee_id,
             "category": {"name": self.category.name} if self.category else None,
             "court": {"name": self.court.name} if self.court else None,

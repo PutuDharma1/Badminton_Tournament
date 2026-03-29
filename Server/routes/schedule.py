@@ -130,11 +130,15 @@ def assign_groups(teams, target_size=4):
 
 def generate_round_robin_matches(tournament_id, category_id=None):
     """
-    Generate grouped round-robin matches for tournament_id.
+    Generate grouped round-robin matches for tournament_id, then immediately
+    pre-generate all knockout bracket placeholder matches so the full schedule
+    (GROUP + KNOCKOUT) is known from day one.
 
     1. Assign teams to groups of ~4
-    2. Generate cross-group round-robin with fairness scheduling
-    3. All matches get stage='GROUP' and group_code='A'/'B'/'C'/…
+    2. Generate cross-group round-robin with fairness scheduling (GROUP matches)
+    3. Pre-generate KNOCKOUT placeholder matches scheduled the next day after group stage
+    4. All GROUP matches get stage='GROUP'; KNOCKOUT placeholders get home/away_team_id=None
+       with home_placeholder/away_placeholder labels like "Winner Grp A".
     """
     tournament = Tournament.query.get(tournament_id)
     if not tournament:
@@ -171,7 +175,8 @@ def generate_round_robin_matches(tournament_id, category_id=None):
     base_start = _parse_hhmm(DAILY_START, base_date)
 
     all_matches = []
-    
+    groups_by_cat = {}  # resolved_cat_id -> groups dict {'A': [teams], …}
+
     # Shared scheduling state across all categories and groups
     court_available = {c.id: base_start for c in courts}
     team_last_finish = {t.id: base_start - MIN_REST for t in teams}
@@ -193,6 +198,7 @@ def generate_round_robin_matches(tournament_id, category_id=None):
 
         # Assign groups & persist group_code on Team rows
         groups = assign_groups(cat_teams, target_size=4)
+        groups_by_cat[resolved_cat_id] = groups  # save for knockout pre-generation
         for code, grp_teams in groups.items():
             for team in grp_teams:
                 team.group_code = code
@@ -204,10 +210,10 @@ def generate_round_robin_matches(tournament_id, category_id=None):
             team_list = list(grp_teams)
             if len(team_list) % 2 == 1:
                 team_list.append(None)  # BYE
-            
+
             num_rounds = len(team_list) - 1
             half = len(team_list) // 2
-            
+
             rounds_for_group = []
             for _ in range(num_rounds):
                 pairs = []
@@ -219,12 +225,12 @@ def generate_round_robin_matches(tournament_id, category_id=None):
                 rounds_for_group.append(pairs)
                 # Rotate
                 team_list = [team_list[0]] + [team_list[-1]] + team_list[1:-1]
-                
+
             group_rounds[code] = rounds_for_group
-            
+
         # 2. Collect all rounds globally and schedule
         max_r = max((len(r) for r in group_rounds.values()), default=0)
-        
+
         for round_idx in range(max_r):
             # Gather all pairs across all groups for this round
             remaining = []
@@ -232,7 +238,7 @@ def generate_round_robin_matches(tournament_id, category_id=None):
                 if round_idx < len(rounds_for_group):
                     for a, b in rounds_for_group[round_idx]:
                         remaining.append((code, a, b))
-                        
+
             # Schedule these pairs
             while remaining:
                 best_court_id = min(court_available, key=court_available.get)
@@ -268,11 +274,11 @@ def generate_round_robin_matches(tournament_id, category_id=None):
 
                 fair_cands = [c for c in candidates if c[5]]  # fair is index 5
                 chosen = min(fair_cands if fair_cands else candidates, key=lambda c: c[6])  # score is index 6
-                
+
                 ch_code, team_a, team_b = chosen[0], chosen[1], chosen[2]
 
                 # Update remaining
-                remaining = [item for item in remaining 
+                remaining = [item for item in remaining
                              if not (item[0] == ch_code and item[1].id == team_a.id and item[2].id == team_b.id)]
 
                 # Build Match
@@ -296,11 +302,123 @@ def generate_round_robin_matches(tournament_id, category_id=None):
                     match_history.setdefault(tid, []).append((finish_time, MATCH_DURATION))
                 court_available[best_court_id] = finish_time
 
+    # ── Pre-generate knockout placeholder matches ─────────────────────────────
+    if all_matches and groups_by_cat:
+        ko_matches = pre_generate_knockout_matches(
+            tournament_id, court_available, groups_by_cat
+        )
+        all_matches.extend(ko_matches)
+
     if all_matches:
         db.session.add_all(all_matches)
         db.session.commit()
 
     return all_matches
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Knockout placeholder pre-generation
+# ──────────────────────────────────────────────────────────────────────────────
+
+def pre_generate_knockout_matches(tournament_id, court_available_after_group, groups_by_cat):
+    """
+    Create placeholder KNOCKOUT Match rows for the full bracket tree, scheduled
+    the day after the last group-stage match.
+
+    - home_team_id / away_team_id are NULL (unknown until group stage finishes)
+    - home_placeholder / away_placeholder hold labels like "Winner Grp A"
+    - Subsequent rounds get "TBD" labels until advance_knockout() fills them in
+    """
+    tournament = Tournament.query.get(tournament_id)
+    if not tournament or not court_available_after_group:
+        return []
+
+    MATCH_DURATION = timedelta(minutes=int(tournament.match_duration_minutes or 40))
+    DAILY_START = tournament.daily_start_time or '09:00'
+    DAILY_END   = tournament.daily_end_time   or '18:00'
+    BREAK_START = tournament.break_start_time or None
+    BREAK_END   = tournament.break_end_time   or None
+
+    # Knockout starts the day after the last scheduled group match
+    last_group_time = max(court_available_after_group.values())
+    ko_start_date = (last_group_time + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    base_ko_start = _parse_hhmm(DAILY_START, ko_start_date)
+
+    # Fresh court availability for knockout
+    court_available = {cid: base_ko_start for cid in court_available_after_group}
+
+    round_labels = {2: 'F', 4: 'SF', 8: 'QF', 16: 'R16', 32: 'R32'}
+    all_ko_matches = []
+
+    for cat_id, groups in groups_by_cat.items():
+        group_codes = sorted(groups.keys())
+        n_qualifiers = len(group_codes) * 2
+        if n_qualifiers < 2:
+            continue
+
+        bracket_size = _next_power_of_2(n_qualifiers)
+
+        # Seeding order — same logic as generate_knockout_bracket
+        seeds_top = [{'group': g, 'rank': 1} for g in group_codes]
+        seeds_bot = [{'group': g, 'rank': 2} for g in reversed(group_codes)]
+        seeded = []
+        for i in range(max(len(seeds_top), len(seeds_bot))):
+            if i < len(seeds_top):
+                seeded.append(seeds_top[i])
+            if i < len(seeds_bot):
+                seeded.append(seeds_bot[i])
+        while len(seeded) < bracket_size:
+            seeded.append(None)  # BYE padding
+
+        ko_round = 1
+        current_size = bracket_size // 2  # matches in this round
+
+        while current_size >= 1:
+            label = round_labels.get(current_size * 2, f'R{current_size * 2}')
+            if current_size == 1:
+                label = 'F'
+
+            for pos_idx in range(current_size):
+                bracket_pos = pos_idx + 1
+
+                best_court = min(court_available, key=court_available.get)
+                t_slot = resolve_slot(
+                    court_available[best_court], DAILY_START, DAILY_END, BREAK_START, BREAK_END
+                )
+
+                if ko_round == 1:
+                    h_info = seeded[pos_idx * 2] if pos_idx * 2 < len(seeded) else None
+                    a_info = seeded[pos_idx * 2 + 1] if pos_idx * 2 + 1 < len(seeded) else None
+                    h_label = f"Winner Grp {h_info['group']}" if h_info else 'BYE'
+                    a_label = f"Runner Up Grp {a_info['group']}" if a_info else 'BYE'
+                else:
+                    h_label = 'TBD'
+                    a_label = 'TBD'
+
+                m = Match(
+                    round=ko_round,
+                    group_code=label,
+                    stage='KNOCKOUT',
+                    bracket_position=bracket_pos,
+                    scheduled_at=t_slot,
+                    status='SCHEDULED',
+                    tournament_id=tournament_id,
+                    category_id=cat_id,
+                    home_team_id=None,
+                    away_team_id=None,
+                    court_id=best_court,
+                    home_placeholder=h_label,
+                    away_placeholder=a_label,
+                )
+                all_ko_matches.append(m)
+                court_available[best_court] = t_slot + MATCH_DURATION
+
+            current_size //= 2
+            ko_round += 1
+
+    return all_ko_matches
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -343,10 +461,14 @@ def _next_power_of_2(n):
 
 def generate_knockout_bracket(tournament_id):
     """
-    Generate single-elimination bracket from top-2 per group, PER CATEGORY.
+    Populate the pre-generated knockout bracket placeholders with actual team IDs.
 
-    Seeding: cross-group (A1 vs last-group's #2, etc.)
-    BYEs auto-advance if bracket size > qualifier count.
+    After all GROUP matches finish, this function computes standings and updates
+    the placeholder Round-1 KNOCKOUT matches with real home_team_id / away_team_id.
+    BYEs are auto-advanced.
+
+    Falls back to creating new Match rows if no pre-generated placeholders exist
+    (backward compatibility with tournaments started before this feature).
     """
     tournament = Tournament.query.get(tournament_id)
     if not tournament:
@@ -363,18 +485,114 @@ def generate_knockout_bracket(tournament_id):
             "Complete all group matches before generating the bracket."
         )
 
-    # Get group standings — top 2 per group
     from routes.tournament import compute_group_standings
     teams = Team.query.filter_by(tournament_id=tournament_id).all()
-    
+
     cat_teams = {}
     for t in teams:
         cat_id = t.category_id or 1
-        if cat_id not in cat_teams:
-            cat_teams[cat_id] = []
-        cat_teams[cat_id].append(t)
+        cat_teams.setdefault(cat_id, []).append(t)
 
-    # Get scheduling info
+    # Detect whether pre-generated placeholders exist
+    has_placeholders = Match.query.filter_by(
+        tournament_id=tournament_id,
+        stage='KNOCKOUT',
+        round=1,
+    ).filter(Match.home_team_id == None).count() > 0  # noqa: E711
+
+    if has_placeholders:
+        return _fill_knockout_placeholders(tournament_id, tournament, cat_teams, compute_group_standings)
+    else:
+        return _create_knockout_bracket_legacy(tournament_id, tournament, cat_teams, compute_group_standings)
+
+
+def _fill_knockout_placeholders(tournament_id, tournament, cat_teams, compute_group_standings):
+    """Update pre-generated R1 knockout placeholders with actual team IDs."""
+    matches_updated = []
+
+    for cat_id, t_list in cat_teams.items():
+        group_codes = sorted(set(t.group_code for t in t_list if t.group_code))
+
+        qualifiers = []
+        for code in group_codes:
+            standings = compute_group_standings(tournament_id, code, cat_id)
+            for row in standings[:2]:
+                qualifiers.append({'team_id': row['teamId'], 'group': code, 'rank': row['rank']})
+
+        if len(qualifiers) < 2:
+            continue
+
+        seeds_top = [q for q in qualifiers if q['rank'] == 1]
+        seeds_bot = [q for q in qualifiers if q['rank'] == 2]
+        seeds_bot.reverse()
+
+        seeded = []
+        for i in range(max(len(seeds_top), len(seeds_bot))):
+            if i < len(seeds_top):
+                seeded.append(seeds_top[i])
+            if i < len(seeds_bot):
+                seeded.append(seeds_bot[i])
+
+        bracket_size = _next_power_of_2(len(seeded))
+        while len(seeded) < bracket_size:
+            seeded.append(None)
+
+        num_first_round = bracket_size // 2
+
+        for i in range(num_first_round):
+            home_info = seeded[i * 2]
+            away_info = seeded[i * 2 + 1]
+            home_id = home_info['team_id'] if home_info else None
+            away_id = away_info['team_id'] if away_info else None
+
+            placeholder = Match.query.filter_by(
+                tournament_id=tournament_id,
+                category_id=cat_id,
+                stage='KNOCKOUT',
+                round=1,
+                bracket_position=i + 1,
+            ).first()
+
+            if placeholder is None:
+                continue
+
+            if home_id and not away_id:
+                placeholder.home_team_id = home_id
+                placeholder.away_team_id = home_id
+                placeholder.winner_team_id = home_id
+                placeholder.status = 'FINISHED'
+                placeholder.home_placeholder = None
+                placeholder.away_placeholder = None
+            elif not home_id and away_id:
+                placeholder.home_team_id = away_id
+                placeholder.away_team_id = away_id
+                placeholder.winner_team_id = away_id
+                placeholder.status = 'FINISHED'
+                placeholder.home_placeholder = None
+                placeholder.away_placeholder = None
+            elif not home_id and not away_id:
+                continue
+            else:
+                placeholder.home_team_id = home_id
+                placeholder.away_team_id = away_id
+                placeholder.home_placeholder = None
+                placeholder.away_placeholder = None
+
+            matches_updated.append(placeholder)
+
+    if not matches_updated:
+        raise ValueError(
+            "No qualifying teams found to populate the bracket. "
+            "Ensure group stage matches are complete and standings are valid."
+        )
+
+    tournament.current_stage = 'KNOCKOUT'
+    db.session.commit()
+    return matches_updated
+
+
+def _create_knockout_bracket_legacy(tournament_id, tournament, cat_teams, compute_group_standings):
+    """Legacy path: create new knockout Match rows (for old tournaments without pre-generated placeholders)."""
     MATCH_DURATION = timedelta(minutes=int(tournament.match_duration_minutes or 40))
     DAILY_START = tournament.daily_start_time or '09:00'
     DAILY_END   = tournament.daily_end_time   or '18:00'
@@ -383,12 +601,9 @@ def generate_knockout_bracket(tournament_id):
 
     courts = Court.query.filter_by(tournament_id=tournament_id).order_by(Court.id).all()
 
-    # Find the day after last group match
     last_group = (
-        Match.query
-        .filter_by(tournament_id=tournament_id, stage='GROUP')
-        .order_by(Match.scheduled_at.desc())
-        .first()
+        Match.query.filter_by(tournament_id=tournament_id, stage='GROUP')
+        .order_by(Match.scheduled_at.desc()).first()
     )
     if last_group and last_group.scheduled_at:
         ko_start_date = (last_group.scheduled_at + timedelta(days=1)).replace(
@@ -401,40 +616,26 @@ def generate_knockout_bracket(tournament_id):
     if not courts:
         court_available = {1: base_start}
     else:
-        # Seed court availability from DB to avoid conflicts with existing matches
         court_available = _get_court_availability(tournament_id, courts, MATCH_DURATION, base_start)
 
-    round_labels = {
-        2: 'F',
-        4: 'SF',
-        8: 'QF',
-        16: 'R16',
-        32: 'R32',
-    }
-
+    round_labels = {2: 'F', 4: 'SF', 8: 'QF', 16: 'R16', 32: 'R32'}
     matches_created = []
 
-    # Generate brackets per category
     for cat_id, t_list in cat_teams.items():
         group_codes = sorted(set(t.group_code for t in t_list if t.group_code))
 
         qualifiers = []
         for code in group_codes:
             standings = compute_group_standings(tournament_id, code, cat_id)
-            for row in standings[:2]:  # top 2
-                qualifiers.append({
-                    'team_id': row['teamId'],
-                    'group': code,
-                    'rank': row['rank'],
-                })
+            for row in standings[:2]:
+                qualifiers.append({'team_id': row['teamId'], 'group': code, 'rank': row['rank']})
 
         if len(qualifiers) < 2:
             continue
 
-        # Cross-group seeding: A1, B2, C1, D2, … vs reverse
         seeds_top = [q for q in qualifiers if q['rank'] == 1]
         seeds_bot = [q for q in qualifiers if q['rank'] == 2]
-        seeds_bot.reverse()  # cross-seed
+        seeds_bot.reverse()
 
         seeded = []
         for i in range(max(len(seeds_top), len(seeds_bot))):
@@ -443,66 +644,47 @@ def generate_knockout_bracket(tournament_id):
             if i < len(seeds_bot):
                 seeded.append(seeds_bot[i])
 
-        n_qualifiers = len(seeded)
-        bracket_size = _next_power_of_2(n_qualifiers)
-
-        # Pad with BYEs (None)
+        bracket_size = _next_power_of_2(len(seeded))
         while len(seeded) < bracket_size:
             seeded.append(None)
 
         num_first_round = bracket_size // 2
         first_round_label = round_labels.get(bracket_size, f'R{bracket_size}')
-        ko_round = 1
 
         for i in range(num_first_round):
-            team_a_info = seeded[i * 2]
-            team_b_info = seeded[i * 2 + 1]
-
-            home_id = team_a_info['team_id'] if team_a_info else None
-            away_id = team_b_info['team_id'] if team_b_info else None
+            home_id = seeded[i * 2]['team_id'] if seeded[i * 2] else None
+            away_id = seeded[i * 2 + 1]['team_id'] if seeded[i * 2 + 1] else None
 
             best_court = min(court_available, key=court_available.get)
             t_slot = resolve_slot(court_available[best_court], DAILY_START, DAILY_END, BREAK_START, BREAK_END)
 
-            # BYE handling
             if home_id and not away_id:
-                m = Match(
-                    round=ko_round, group_code=first_round_label, stage='KNOCKOUT', bracket_position=i + 1,
-                    scheduled_at=t_slot, status='FINISHED', tournament_id=tournament_id, category_id=cat_id,
-                    home_team_id=home_id, away_team_id=home_id, winner_team_id=home_id, court_id=best_court if courts else None,
-                )
-                matches_created.append(m)
-                court_available[best_court] = t_slot + MATCH_DURATION
+                m = Match(round=1, group_code=first_round_label, stage='KNOCKOUT', bracket_position=i + 1,
+                          scheduled_at=t_slot, status='FINISHED', tournament_id=tournament_id, category_id=cat_id,
+                          home_team_id=home_id, away_team_id=home_id, winner_team_id=home_id,
+                          court_id=best_court if courts else None)
+            elif not home_id and away_id:
+                m = Match(round=1, group_code=first_round_label, stage='KNOCKOUT', bracket_position=i + 1,
+                          scheduled_at=t_slot, status='FINISHED', tournament_id=tournament_id, category_id=cat_id,
+                          home_team_id=away_id, away_team_id=away_id, winner_team_id=away_id,
+                          court_id=best_court if courts else None)
+            elif not home_id and not away_id:
                 continue
+            else:
+                m = Match(round=1, group_code=first_round_label, stage='KNOCKOUT', bracket_position=i + 1,
+                          scheduled_at=t_slot, status='SCHEDULED', tournament_id=tournament_id, category_id=cat_id,
+                          home_team_id=home_id, away_team_id=away_id,
+                          court_id=best_court if courts else None)
 
-            if not home_id and away_id:
-                m = Match(
-                    round=ko_round, group_code=first_round_label, stage='KNOCKOUT', bracket_position=i + 1,
-                    scheduled_at=t_slot, status='FINISHED', tournament_id=tournament_id, category_id=cat_id,
-                    home_team_id=away_id, away_team_id=away_id, winner_team_id=away_id, court_id=best_court if courts else None,
-                )
-                matches_created.append(m)
-                court_available[best_court] = t_slot + MATCH_DURATION
-                continue
-
-            if not home_id and not away_id:
-                continue  # both BYE, skip
-
-            # Normal match
-            m = Match(
-                round=ko_round, group_code=first_round_label, stage='KNOCKOUT', bracket_position=i + 1,
-                scheduled_at=t_slot, status='SCHEDULED', tournament_id=tournament_id, category_id=cat_id,
-                home_team_id=home_id, away_team_id=away_id, court_id=best_court if courts else None,
-            )
             matches_created.append(m)
             court_available[best_court] = t_slot + MATCH_DURATION
+
     if not matches_created:
         raise ValueError("Not enough qualifiers across any category to form a bracket.")
 
     db.session.add_all(matches_created)
     tournament.current_stage = 'KNOCKOUT'
     db.session.commit()
-
     return matches_created
 
 
@@ -512,10 +694,13 @@ def generate_knockout_bracket(tournament_id):
 
 def advance_knockout(tournament_id, finished_match):
     """
-    After a KNOCKOUT match finishes, check if we can create / fill
-    the next-round match.
+    After a KNOCKOUT match finishes, fill the next-round placeholder match
+    with the actual winners once both siblings in the pair have finished.
 
     Bracket positions are paired: (1,2) → next pos 1, (3,4) → next pos 2, etc.
+
+    If pre-generated placeholder matches exist (new behavior), they are updated
+    in-place. Otherwise new Match rows are created (legacy fallback).
     """
     if finished_match.stage != 'KNOCKOUT' or not finished_match.winner_team_id:
         return None
@@ -524,11 +709,7 @@ def advance_knockout(tournament_id, finished_match):
     if not pos:
         return None
 
-    # Find sibling match (positions are paired: 1&2, 3&4, 5&6…)
-    if pos % 2 == 1:
-        sibling_pos = pos + 1
-    else:
-        sibling_pos = pos - 1
+    sibling_pos = pos + 1 if pos % 2 == 1 else pos - 1
 
     sibling = Match.query.filter_by(
         tournament_id=tournament_id,
@@ -541,55 +722,9 @@ def advance_knockout(tournament_id, finished_match):
     if not sibling or sibling.status != 'FINISHED' or not sibling.winner_team_id:
         return None  # sibling hasn't finished yet
 
-    # Both siblings finished — create next-round match
     next_round = finished_match.round + 1
     next_pos = (min(pos, sibling_pos) + 1) // 2  # 1&2→1, 3&4→2
 
-    # Determine round label
-    round_labels = {2: 'F', 4: 'SF', 8: 'QF', 16: 'R16', 32: 'R32'}
-    # Count how many matches in next round should exist
-    current_round_count = Match.query.filter_by(
-        tournament_id=tournament_id, stage='KNOCKOUT', round=finished_match.round
-    ).count()
-    next_round_size = current_round_count // 2
-    label = round_labels.get(next_round_size * 2, f'R{next_round_size * 2}')
-    if next_round_size == 1:
-        label = 'F'
-
-    tournament = Tournament.query.get(tournament_id)
-    MATCH_DURATION = timedelta(minutes=int(tournament.match_duration_minutes or 40))
-    DAILY_START = tournament.daily_start_time or '09:00'
-    DAILY_END   = tournament.daily_end_time   or '18:00'
-    BREAK_START = tournament.break_start_time or None
-    BREAK_END   = tournament.break_end_time   or None
-
-    courts = Court.query.filter_by(tournament_id=tournament_id).order_by(Court.id).all()
-
-    # Schedule after both matches finished
-    latest_finish = max(
-        finished_match.finished_at or datetime.now(),
-        sibling.finished_at or datetime.now()
-    )
-    earliest_wanted = latest_finish + timedelta(minutes=30)
-
-    # Find the court with the earliest available slot (query DB for real availability)
-    if courts:
-        court_available = _get_court_availability(tournament_id, courts, MATCH_DURATION, earliest_wanted)
-        # Pick the court that is available earliest, but not before earliest_wanted
-        best_court = None
-        best_time = None
-        for court_id, avail_time in court_available.items():
-            candidate = max(avail_time, earliest_wanted)
-            candidate = resolve_slot(candidate, DAILY_START, DAILY_END, BREAK_START, BREAK_END)
-            if best_time is None or candidate < best_time:
-                best_time = candidate
-                best_court = court_id
-        t_slot = best_time
-    else:
-        best_court = None
-        t_slot = resolve_slot(earliest_wanted, DAILY_START, DAILY_END, BREAK_START, BREAK_END)
-
-    # Assign correct home/away based on bracket position
     if pos % 2 == 1:
         home_id = finished_match.winner_team_id
         away_id = sibling.winner_team_id
@@ -597,22 +732,66 @@ def advance_knockout(tournament_id, finished_match):
         home_id = sibling.winner_team_id
         away_id = finished_match.winner_team_id
 
-    new_match = Match(
-        round=next_round,
-        group_code=label,
-        stage='KNOCKOUT',
-        bracket_position=next_pos,
-        scheduled_at=t_slot,
-        status='SCHEDULED',
+    # Try to find a pre-generated placeholder for this slot
+    next_match = Match.query.filter_by(
         tournament_id=tournament_id,
         category_id=finished_match.category_id,
-        home_team_id=home_id,
-        away_team_id=away_id,
+        stage='KNOCKOUT',
+        round=next_round,
+        bracket_position=next_pos,
+    ).first()
+
+    if next_match:
+        # Update the existing placeholder with real team IDs
+        next_match.home_team_id = home_id
+        next_match.away_team_id = away_id
+        next_match.home_placeholder = None
+        next_match.away_placeholder = None
+        db.session.commit()
+        return next_match
+
+    # ── Legacy fallback: create a new Match row ───────────────────────────────
+    tournament = Tournament.query.get(tournament_id)
+    MATCH_DURATION = timedelta(minutes=int(tournament.match_duration_minutes or 40))
+    DAILY_START = tournament.daily_start_time or '09:00'
+    DAILY_END   = tournament.daily_end_time   or '18:00'
+    BREAK_START = tournament.break_start_time or None
+    BREAK_END   = tournament.break_end_time   or None
+
+    round_labels = {2: 'F', 4: 'SF', 8: 'QF', 16: 'R16', 32: 'R32'}
+    current_round_count = Match.query.filter_by(
+        tournament_id=tournament_id, stage='KNOCKOUT', round=finished_match.round
+    ).count()
+    next_round_size = current_round_count // 2
+    label = 'F' if next_round_size == 1 else round_labels.get(next_round_size * 2, f'R{next_round_size * 2}')
+
+    courts = Court.query.filter_by(tournament_id=tournament_id).order_by(Court.id).all()
+    latest_finish = max(
+        finished_match.finished_at or datetime.now(),
+        sibling.finished_at or datetime.now()
+    )
+    earliest_wanted = latest_finish + timedelta(minutes=30)
+
+    if courts:
+        court_available = _get_court_availability(tournament_id, courts, MATCH_DURATION, earliest_wanted)
+        best_court, best_time = None, None
+        for court_id, avail_time in court_available.items():
+            candidate = resolve_slot(max(avail_time, earliest_wanted), DAILY_START, DAILY_END, BREAK_START, BREAK_END)
+            if best_time is None or candidate < best_time:
+                best_time, best_court = candidate, court_id
+        t_slot = best_time
+    else:
+        best_court = None
+        t_slot = resolve_slot(earliest_wanted, DAILY_START, DAILY_END, BREAK_START, BREAK_END)
+
+    new_match = Match(
+        round=next_round, group_code=label, stage='KNOCKOUT', bracket_position=next_pos,
+        scheduled_at=t_slot, status='SCHEDULED', tournament_id=tournament_id,
+        category_id=finished_match.category_id, home_team_id=home_id, away_team_id=away_id,
         court_id=best_court,
     )
     db.session.add(new_match)
     db.session.commit()
-
     return new_match
 
 
