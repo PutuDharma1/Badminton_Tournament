@@ -109,17 +109,22 @@ function Wasit() {
 
   return (
     <div className="main-content-wide">
-      <h1 className="page-title">👨‍⚖️ Referee Dashboard</h1>
-      <p className="page-subtitle">
-        Manage your matches, input scores, and find new assignments. (Max 1 active match at a time)
-      </p>
+      <div style={{ marginBottom: 28 }}>
+        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 8px' }}>
+          Referee Portal
+        </p>
+        <h1 className="page-title">Referee Dashboard</h1>
+        <p className="page-subtitle" style={{ marginTop: 6 }}>
+          Manage your matches, input scores, and find new assignments.
+        </p>
+      </div>
 
       {error && <div className="alert-error">{error}</div>}
 
       {/* My Matches Section */}
       <div className="card mt-16" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: '#3b82f6' }}>My Active Matches</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>My Active Matches</h3>
           <button className="btn-outline" style={{ fontSize: 12, padding: '4px 10px' }} onClick={fetchMatches}>
             ↻ Refresh
           </button>
@@ -138,7 +143,7 @@ function Wasit() {
       {/* Available Matches Section */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: '#10b981', margin: 0 }}>Available for Pickup</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Available for Pickup</h3>
 
           {/* Tournament Selector */}
           {tournaments.length > 0 && (

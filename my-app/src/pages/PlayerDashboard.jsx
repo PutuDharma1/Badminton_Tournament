@@ -4,686 +4,498 @@ import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
 import participantsApi from '../api/participants';
 
-function PlayerDashboard() {
-    const navigate = useNavigate();
-    const { user } = useAuth();
-    const [myTournaments, setMyTournaments] = useState([]);
-    const [availableTournaments, setAvailableTournaments] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [registering, setRegistering] = useState(null); // tournamentId being registered
-    const [showRegisterModal, setShowRegisterModal] = useState(null); // tournament object
+// ─── Status config ────────────────────────────────────────────────────────────
+const STATUS_CFG = {
+  DRAFT:    { label: 'Draft',    accent: '#3b82f6', bg: 'rgba(59,130,246,0.08)',  dot: '#3b82f6' },
+  ONGOING:  { label: 'Ongoing',  accent: '#c2410c', bg: 'rgba(194,65,12,0.08)',   dot: '#f97316' },
+  FINISHED: { label: 'Finished', accent: '#15803d', bg: 'rgba(21,128,61,0.08)',   dot: '#22c55e' },
+};
 
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const fetchData = async () => {
-        try {
-            setLoading(true);
-            setError('');
-
-            // Fetch my tournaments and all tournaments in parallel
-            const [myData, allData] = await Promise.all([
-                participantsApi.getMyTournaments(),
-                tournamentsApi.getTournaments()
-            ]);
-
-            setMyTournaments(myData);
-
-            // Filter available tournaments: all tournaments not already joined
-            const myTournamentIds = new Set(myData.map(t => t.id));
-            const available = allData.filter(
-                t => !myTournamentIds.has(t.id)
-            );
-            setAvailableTournaments(available);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleRegister = async (tournament, categoryId, partnerEmail) => {
-        setRegistering(tournament.id);
-        try {
-            const payload = {
-                tournamentId: tournament.id,
-                categoryId: categoryId || tournament.categories?.[0]?.id || null,
-            };
-            if (partnerEmail) {
-                payload.partnerEmail = partnerEmail;
-            }
-            await participantsApi.selfRegister(payload);
-            // Refresh data
-            await fetchData();
-            setShowRegisterModal(null);
-        } catch (err) {
-            alert(err.message || 'Registration failed');
-        } finally {
-            setRegistering(null);
-        }
-    };
-
-    // Stats
-    const stats = {
-        joined: myTournaments.length,
-        ongoing: myTournaments.filter(t => t.status === 'ONGOING').length,
-        draft: myTournaments.filter(t => t.status === 'DRAFT').length,
-        finished: myTournaments.filter(t => t.status === 'FINISHED').length,
-    };
-
-    if (loading) {
-        return (
-            <div className="main-content" style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-                <div className="spinner"></div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="main-content-wide">
-            {/* Header */}
-            <div style={{ marginBottom: 24 }}>
-                <h1 className="page-title">🏸 Player Dashboard</h1>
-                <p className="page-subtitle">
-                    Welcome, {user?.name}! Manage your tournaments and view your match schedule.
-                </p>
-            </div>
-
-            {error && (
-                <div className="alert-error">
-                    <p style={{ margin: 0 }}>{error}</p>
-                </div>
-            )}
-
-            {/* Stats Cards */}
-            <div className="stat-grid">
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <span className="stat-label">Tournaments Joined</span>
-                        <span className="stat-chip" style={{ borderColor: '#3b82f6' }}>
-                            Total
-                        </span>
-                    </div>
-                    <div className="stat-value">{stats.joined}</div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <span className="stat-label">Ongoing</span>
-                        <span className="stat-chip" style={{ borderColor: '#f59e0b', color: '#fde047' }}>
-                            Active
-                        </span>
-                    </div>
-                    <div className="stat-value">{stats.ongoing}</div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <span className="stat-label">Upcoming</span>
-                        <span className="stat-chip">Draft</span>
-                    </div>
-                    <div className="stat-value">{stats.draft}</div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-header">
-                        <span className="stat-label">Completed</span>
-                        <span className="stat-chip" style={{ borderColor: '#22c55e', color: '#86efac' }}>
-                            Done
-                        </span>
-                    </div>
-                    <div className="stat-value">{stats.finished}</div>
-                </div>
-            </div>
-
-            {/* My Tournaments Section */}
-            <div style={{ marginTop: 32, marginBottom: 16 }}>
-                <h2 className="section-title">📋 My Tournaments</h2>
-            </div>
-
-            {myTournaments.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: 16, marginBottom: 8 }}>
-                        You are not registered in any tournament yet.
-                    </p>
-                    <p style={{ color: 'var(--text-faint)', fontSize: 13 }}>
-                        Check the available tournaments below to register.
-                    </p>
-                </div>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-                    {myTournaments.map(tournament => (
-                        <MyTournamentCard
-                            key={tournament.id}
-                            tournament={tournament}
-                            onView={() => navigate(`/tournament/${tournament.id}`)}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* Available Tournaments Section */}
-            <div style={{ marginTop: 40, marginBottom: 16 }}>
-                <h2 className="section-title">🏆 Available Tournaments</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
-                    List of tournaments created by organizers. You can register for tournaments that are still in DRAFT status.
-                </p>
-            </div>
-
-            {availableTournaments.length === 0 ? (
-                <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-                    <p style={{ color: 'var(--text-muted)', fontSize: 16 }}>
-                        No tournaments available at this time.
-                    </p>
-                </div>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-                    {availableTournaments.map(tournament => (
-                        <AvailableTournamentCard
-                            key={tournament.id}
-                            tournament={tournament}
-                            onRegister={() => setShowRegisterModal(tournament)}
-                            isRegistering={registering === tournament.id}
-                        />
-                    ))}
-                </div>
-            )}
-
-            {/* Register Confirmation Modal */}
-            {showRegisterModal && (
-                <RegisterModal
-                    tournament={showRegisterModal}
-                    user={user}
-                    onConfirm={(categoryId, partnerEmail) => handleRegister(showRegisterModal, categoryId, partnerEmail)}
-                    onClose={() => setShowRegisterModal(null)}
-                    isLoading={registering === showRegisterModal.id}
-                />
-            )}
-        </div>
-    );
+// ─── Stat card ────────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-header">
+        <span className="stat-label">{label}</span>
+      </div>
+      <div className="stat-value">{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
 }
 
+// ─── Tournament Card (for joined) ─────────────────────────────────────────────
+function TournamentCard({ tournament, onView }) {
+  const isDark = document.documentElement.classList.contains('dark');
+  const statusKey = tournament.status || 'DRAFT';
+  const cfg = STATUS_CFG[statusKey] || STATUS_CFG.DRAFT;
+  const accent = cfg.accent;
+  const bg = cfg.bg;
 
-// ─── My Tournament Card ─────────────────────────────────────────────────────
+  const startDate = tournament.startDate
+    ? new Date(tournament.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '—';
 
-function MyTournamentCard({ tournament, onView }) {
-    const statusColors = {
-        DRAFT: { bg: 'var(--status-scheduled-bg)', border: 'var(--status-scheduled-border)', text: 'var(--status-scheduled-text)' },
-        ONGOING: { bg: 'var(--status-ongoing-bg)', border: 'var(--status-ongoing-border)', text: 'var(--status-ongoing-text)' },
-        FINISHED: { bg: 'var(--status-finished-bg)', border: 'var(--status-finished-border)', text: 'var(--status-finished-text)' },
-    };
-    const status = statusColors[tournament.status] || statusColors.DRAFT;
+  return (
+    <article style={{
+      background: 'var(--bg-card)',
+      border: '1.5px solid var(--border)',
+      borderLeft: `3px solid ${accent}`,
+      borderRadius: 14,
+      padding: '16px 18px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+      boxShadow: 'var(--shadow-card)',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-card-hover)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-card)'; }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <h3 style={{
+          fontFamily: "'Outfit', sans-serif",
+          fontSize: 15, fontWeight: 700,
+          color: 'var(--text-primary)', margin: 0, flex: 1, lineHeight: 1.3,
+        }}>
+          {tournament.name}
+        </h3>
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          padding: '3px 8px', borderRadius: 6,
+          background: bg, color: accent,
+          textTransform: 'uppercase', letterSpacing: '0.06em',
+          whiteSpace: 'nowrap', flexShrink: 0,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: cfg.dot, display: 'inline-block' }} />
+          {cfg.label}
+        </span>
+      </div>
 
-    return (
-        <div className="card" style={{ padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>{tournament.name}</h3>
-                <span
-                    style={{
-                        fontSize: 11,
-                        padding: '3px 8px',
-                        borderRadius: 999,
-                        background: status.bg,
-                        border: `1px solid ${status.border}`,
-                        color: status.text,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        fontWeight: '600'
-                    }}
-                >
-                    {tournament.status}
-                </span>
-            </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {[
+          { icon: '📍', text: tournament.location },
+          { icon: '📅', text: startDate },
+          { icon: '👥', text: `${tournament.participantCount || 0} participants` },
+        ].map(({ icon, text }) => (
+          <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+            <span style={{ width: 15, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+            <span>{text}</span>
+          </div>
+        ))}
+      </div>
 
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-                <p style={{ margin: '4px 0' }}>📍 {tournament.location}</p>
-                <p style={{ margin: '4px 0' }}>📅 {new Date(tournament.startDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                <p style={{ margin: '4px 0' }}>👥 {tournament.participantCount || 0} participants</p>
-            </div>
-
-            {tournament.description && (
-                <p style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 12, lineHeight: 1.4 }}>
-                    {tournament.description.length > 80
-                        ? tournament.description.substring(0, 80) + '...'
-                        : tournament.description}
-                </p>
-            )}
-
-            <button
-                className="btn-primary"
-                onClick={onView}
-                style={{ width: '100%', fontSize: 13, padding: '8px 12px' }}
-            >
-                View Details
-            </button>
-        </div>
-    );
+      <div style={{ marginTop: 4 }}>
+        <button
+          className="btn-primary"
+          onClick={onView}
+          style={{ width: '100%', padding: '8px 12px', fontSize: 13 }}
+        >
+          View Details
+        </button>
+      </div>
+    </article>
+  );
 }
 
-
-// ─── Available Tournament Card ───────────────────────────────────────────────
-
+// ─── Available Tournament Card ────────────────────────────────────────────────
 function AvailableTournamentCard({ tournament, onRegister, isRegistering }) {
-    const now = new Date();
-    const deadlinePassed = tournament.registrationDeadline && new Date(tournament.registrationDeadline) < now;
-    const canRegister = tournament.status === 'DRAFT' && !deadlinePassed;
+  const now = new Date();
+  const deadlinePassed = tournament.registrationDeadline && new Date(tournament.registrationDeadline) < now;
+  const canRegister = tournament.status === 'DRAFT' && !deadlinePassed;
 
-    const statusConfig = {
-        DRAFT: { badge: 'badge badge-scheduled', label: 'OPEN', canJoin: true },
-        ONGOING: { badge: 'badge badge-ongoing', label: 'ONGOING', canJoin: false },
-        FINISHED: { badge: 'badge badge-finished', label: 'FINISHED', canJoin: false },
-    };
-    const config = statusConfig[tournament.status] || statusConfig.DRAFT;
+  const startDate = tournament.startDate
+    ? new Date(tournament.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '—';
 
-    return (
-        <div className="card" style={{ padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>{tournament.name}</h3>
-                <span className={config.badge}>{config.label}</span>
-            </div>
+  const deadline = tournament.registrationDeadline
+    ? new Date(tournament.registrationDeadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    : null;
 
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-                <p style={{ margin: '4px 0' }}>📍 {tournament.location}</p>
-                <p style={{ margin: '4px 0' }}>📅 {new Date(tournament.startDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                <p style={{ margin: '4px 0' }}>👥 {tournament.participantCount || 0} registered participants</p>
-                {tournament.registrationDeadline && (
-                    <p style={{ margin: '4px 0', color: deadlinePassed ? '#f87171' : 'var(--text-muted)' }}>
-                        ⏰ Registration deadline: {new Date(tournament.registrationDeadline).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })} at {new Date(tournament.registrationDeadline).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                )}
-            </div>
+  return (
+    <article style={{
+      background: 'var(--bg-card)',
+      border: '1.5px solid var(--border)',
+      borderRadius: 14,
+      padding: '16px 18px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 10,
+      boxShadow: 'var(--shadow-card)',
+      opacity: canRegister ? 1 : 0.7,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <h3 style={{
+          fontFamily: "'Outfit', sans-serif",
+          fontSize: 15, fontWeight: 700,
+          color: 'var(--text-primary)', margin: 0, flex: 1, lineHeight: 1.3,
+        }}>
+          {tournament.name}
+        </h3>
+        {canRegister ? (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+            background: 'rgba(34,197,94,0.1)', color: '#22c55e',
+            textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            Open
+          </span>
+        ) : (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+            background: 'var(--bg-subtle)', color: 'var(--text-faint)',
+            textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            Closed
+          </span>
+        )}
+      </div>
 
-            {tournament.description && (
-                <p style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 12, lineHeight: 1.4 }}>
-                    {tournament.description.length > 80
-                        ? tournament.description.substring(0, 80) + '...'
-                        : tournament.description}
-                </p>
-            )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {[
+          { icon: '📍', text: tournament.location },
+          { icon: '📅', text: startDate },
+          { icon: '👥', text: `${tournament.participantCount || 0} registered` },
+          ...(deadline ? [{ icon: '⏰', text: `Deadline: ${deadline}`, red: deadlinePassed }] : []),
+        ].map(({ icon, text, red }) => (
+          <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: red ? '#f87171' : 'var(--text-muted)' }}>
+            <span style={{ width: 15, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+            <span>{text}</span>
+          </div>
+        ))}
+      </div>
 
-            {/* Categories */}
-            {tournament.categories && tournament.categories.length > 0 && (
-                <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {tournament.categories.map(cat => (
-                        <span key={cat.id} className="stat-chip" style={{ fontSize: 10 }}>
-                            {cat.name}
-                        </span>
-                    ))}
-                </div>
-            )}
-
-            {canRegister ? (
-                <button
-                    className="btn-primary"
-                    onClick={onRegister}
-                    disabled={isRegistering}
-                    style={{ width: '100%', fontSize: 13, padding: '8px 12px', opacity: isRegistering ? 0.7 : 1 }}
-                >
-                    {isRegistering ? 'Registering...' : '✋ Register for Tournament'}
-                </button>
-            ) : (
-                <button
-                    className="btn-outline"
-                    disabled
-                    style={{ width: '100%', fontSize: 13, padding: '8px 12px', opacity: 0.6, cursor: 'not-allowed' }}
-                >
-                    {deadlinePassed ? '⏰ Registration Deadline Passed' : '🔒 Registration Closed'}
-                </button>
-            )}
+      {/* Category tags */}
+      {tournament.categories && tournament.categories.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {tournament.categories.slice(0, 4).map(cat => (
+            <span key={cat.id} style={{
+              fontSize: 10, fontWeight: 600,
+              padding: '2px 7px', borderRadius: 5,
+              background: 'var(--bg-subtle)', color: 'var(--text-faint)',
+            }}>
+              {cat.name}
+            </span>
+          ))}
+          {tournament.categories.length > 4 && (
+            <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>+{tournament.categories.length - 4} more</span>
+          )}
         </div>
-    );
+      )}
+
+      <div style={{ marginTop: 2 }}>
+        {canRegister ? (
+          <button
+            className="btn-primary"
+            onClick={onRegister}
+            disabled={isRegistering}
+            style={{ width: '100%', padding: '8px 12px', fontSize: 13 }}
+          >
+            {isRegistering ? 'Registering…' : 'Register Now'}
+          </button>
+        ) : (
+          <button
+            className="btn-outline"
+            disabled
+            style={{ width: '100%', padding: '8px 12px', fontSize: 13, opacity: 0.5, cursor: 'not-allowed' }}
+          >
+            {deadlinePassed ? 'Deadline Passed' : 'Registration Closed'}
+          </button>
+        )}
+      </div>
+    </article>
+  );
 }
 
-
-// ─── Register Confirmation Modal ─────────────────────────────────────────────
-
+// ─── Register Modal ───────────────────────────────────────────────────────────
 function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
-    // Calculate player's age from birth_date
-    const playerAge = (() => {
-        if (!user?.birthDate && !user?.birth_date) return null;
-        const bd = new Date(user.birthDate || user.birth_date);
-        const today = new Date();
-        let age = today.getFullYear() - bd.getFullYear();
-        if (today.getMonth() < bd.getMonth() || (today.getMonth() === bd.getMonth() && today.getDate() < bd.getDate())) {
-            age--;
-        }
-        return age;
-    })();
+  const playerAge = (() => {
+    const bd = user?.birthDate || user?.birth_date;
+    if (!bd) return null;
+    const today = new Date();
+    const d = new Date(bd);
+    let age = today.getFullYear() - d.getFullYear();
+    if (today.getMonth() < d.getMonth() || (today.getMonth() === d.getMonth() && today.getDate() < d.getDate())) age--;
+    return age;
+  })();
 
-    // Helper: check if player age is eligible for a category
-    const isAgeEligible = (cat) => {
-        // OPEN or no age bounds: anyone can join
-        if (cat.minAge == null && cat.maxAge == null) return true;
-        if (cat.minAge === 0 && cat.maxAge === 200) return true;
-        // If player age is unknown, allow (will be validated server-side)
-        if (playerAge === null) return true;
-        return playerAge >= (cat.minAge || 0) && playerAge < (cat.maxAge || 200);
-    };
+  const gender = user?.gender;
 
-    // Helper: get age group label from category
-    const getAgeGroupLabel = (cat) => {
-        if (cat.minAge == null && cat.maxAge == null) return 'OPEN';
-        if (cat.minAge === 0 && cat.maxAge === 200) return 'OPEN';
-        if (cat.maxAge === 11) return 'U11';
-        if (cat.maxAge === 13) return 'U13';
-        if (cat.maxAge === 15) return 'U15';
-        if (cat.maxAge === 17) return 'U17';
-        if (cat.maxAge === 19) return 'U19';
-        return cat.minAge != null ? `${cat.minAge}-${cat.maxAge}` : 'OPEN';
-    };
+  const eligibleCategories = tournament.categories?.filter(cat => {
+    if (playerAge !== null && cat.minAge && playerAge < cat.minAge) return false;
+    if (playerAge !== null && cat.maxAge && playerAge > cat.maxAge) return false;
+    if (gender && cat.gender && cat.gender !== 'MIXED' && cat.gender !== gender) return false;
+    return true;
+  }) || [];
 
-    // Filter categories: gender match + age eligibility
-    const validCategories = (tournament.categories || []).filter(cat =>
-        (cat.gender === 'MIXED' || (user?.gender && cat.gender.toUpperCase() === user.gender.toUpperCase()))
-        && isAgeEligible(cat)
-    );
+  const [selectedCategoryId, setSelectedCategoryId] = useState(eligibleCategories[0]?.id || '');
+  const [partnerEmail, setPartnerEmail] = useState('');
 
-    // Categories that match gender but NOT age (for info display)
-    const ageBlockedCategories = (tournament.categories || []).filter(cat =>
-        (cat.gender === 'MIXED' || (user?.gender && cat.gender.toUpperCase() === user.gender.toUpperCase()))
-        && !isAgeEligible(cat)
-    );
+  const selectedCat = tournament.categories?.find(c => c.id === parseInt(selectedCategoryId));
+  const isDoubles = selectedCat?.type === 'DOUBLE';
+  const isFull = selectedCat?.maxParticipants && (selectedCat?.currentParticipants || 0) >= selectedCat.maxParticipants;
 
-    const isCatFull = (cat) => cat.maxParticipants && (cat.participantCount || 0) >= cat.maxParticipants;
-    const availableCategories = validCategories.filter(cat => !isCatFull(cat));
+  return (
+    <div
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div style={{
+        background: 'var(--bg-card)',
+        border: '1.5px solid var(--border)',
+        borderRadius: 16,
+        padding: '24px 24px 20px',
+        width: '100%', maxWidth: 420,
+        boxShadow: 'var(--shadow-modal)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 700, margin: '0 0 4px', color: 'var(--text-primary)' }}>
+              Register
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{tournament.name}</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', fontSize: 18, lineHeight: 1, padding: 2 }}>✕</button>
+        </div>
 
-    const [selectedCategoryId, setSelectedCategoryId] = useState(
-        availableCategories.length > 0 ? availableCategories[0].id : ''
-    );
+        {eligibleCategories.length === 0 ? (
+          <div style={{ padding: '20px 0', textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>🚫</div>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
+              No categories match your profile (age: {playerAge ?? '?'}, gender: {gender ?? '?'}).
+            </p>
+          </div>
+        ) : (
+          <>
+            {playerAge !== null && (
+              <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 14, padding: '7px 12px', background: 'var(--bg-subtle)', borderRadius: 7 }}>
+                Your profile: {playerAge} years old · {gender || 'Unknown gender'}
+              </div>
+            )}
 
-    // Partner email state for doubles
-    const [partnerEmail, setPartnerEmail] = useState('');
-    const [partnerInfo, setPartnerInfo] = useState(null); // { id, name, email, gender }
-    const [partnerError, setPartnerError] = useState('');
-    const [verifyingPartner, setVerifyingPartner] = useState(false);
-
-    // Determine if selected category is DOUBLE
-    const selectedCategory = validCategories.find(cat => cat.id === Number(selectedCategoryId));
-    const isDoubles = selectedCategory?.categoryType === 'DOUBLE';
-
-    // Reset partner state when category changes
-    const handleCategoryChange = (newCategoryId) => {
-        setSelectedCategoryId(Number(newCategoryId));
-        setPartnerEmail('');
-        setPartnerInfo(null);
-        setPartnerError('');
-    };
-
-    // Verify partner email
-    const handleVerifyPartner = async () => {
-        if (!partnerEmail.trim()) {
-            setPartnerError('Please enter partner email');
-            return;
-        }
-        setVerifyingPartner(true);
-        setPartnerError('');
-        setPartnerInfo(null);
-        try {
-            const result = await participantsApi.lookupPartner(partnerEmail.trim(), tournament.id);
-            setPartnerInfo(result);
-        } catch (err) {
-            setPartnerError(err.message || 'Partner not found');
-        } finally {
-            setVerifyingPartner(false);
-        }
-    };
-
-    // Can register?
-    const canRegister = availableCategories.length > 0 && selectedCategoryId && (!isDoubles || partnerInfo);
-
-    return (
-        <>
-            {/* Backdrop */}
-            <div
-                onClick={onClose}
-                style={{
-                    position: 'fixed',
-                    top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(0, 0, 0, 0.7)',
-                    zIndex: 999,
-                }}
-            />
-
-            {/* Modal */}
-            <div
-                style={{
-                    position: 'fixed',
-                    top: '50%', left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    background: 'var(--modal-bg)',
-                    border: '1px solid var(--modal-border)',
-                    borderRadius: 16,
-                    padding: 24,
-                    maxWidth: 480, width: '90%',
-                    zIndex: 1000,
-                    maxHeight: '90vh',
-                    overflowY: 'auto',
-                }}
-            >
-                <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 8px' }}>
-                    Confirm Registration
-                </h2>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-                    You are about to register as a participant in the following tournament:
-                </p>
-
-                <div className="card" style={{ padding: 16, marginBottom: 20 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>
-                        {tournament.name}
-                    </h3>
-                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                        <p style={{ margin: '4px 0' }}>📍 {tournament.location}</p>
-                        <p style={{ margin: '4px 0' }}>
-                            📅 {new Date(tournament.startDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
-                            {' — '}
-                            {new Date(tournament.endDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                        <p style={{ margin: '4px 0' }}>👥 {tournament.participantCount || 0} registered participants</p>
-                    </div>
-                </div>
-
-                {/* Player age info */}
-                {playerAge !== null && (
-                    <div style={{
-                        padding: '10px 14px', borderRadius: 8, marginBottom: 16,
-                        background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.3)',
-                    }}>
-                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                            🎂 Umur kamu: <strong style={{ color: '#60a5fa' }}>{playerAge} tahun</strong>
-                        </p>
-                    </div>
-                )}
-
-                {validCategories.length > 0 ? (
-                    <>
-                        {/* Category selector */}
-                        <div style={{ marginBottom: 20 }}>
-                            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 8, color: 'var(--text)' }}>
-                                Select Category
-                            </label>
-                            <select
-                                className="input-field"
-                                value={selectedCategoryId}
-                                onChange={(e) => handleCategoryChange(e.target.value)}
-                                style={{ width: '100%' }}
-                            >
-                                {validCategories.map(cat => {
-                                    const full = isCatFull(cat);
-                                    const ageLabel = getAgeGroupLabel(cat);
-                                    return (
-                                        <option key={cat.id} value={cat.id} disabled={full}>
-                                            {cat.name} ({cat.gender} • {cat.categoryType} • {ageLabel})
-                                            {cat.maxParticipants ? ` — ${cat.participantCount || 0}/${cat.maxParticipants}` : ''}
-                                            {full ? ' [FULL]' : ''}
-                                        </option>
-                                    );
-                                })}
-                            </select>
-                            {availableCategories.length === 0 && (
-                                <p style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>
-                                    All eligible categories are full.
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Age-blocked categories info */}
-                        {ageBlockedCategories.length > 0 && (
-                            <div style={{
-                                padding: '8px 12px', borderRadius: 8, marginBottom: 16,
-                                background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.3)',
-                            }}>
-                                <p style={{ fontSize: 11, color: '#f97316', margin: 0 }}>
-                                    ⚠️ {ageBlockedCategories.length} kategori tidak ditampilkan karena tidak sesuai umur ({playerAge} tahun):
-                                    {' '}{ageBlockedCategories.map(c => getAgeGroupLabel(c)).join(', ')}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Partner email section for DOUBLES */}
-                        {isDoubles && (
-                            <div style={{
-                                marginBottom: 20,
-                                padding: 16,
-                                background: 'var(--card-bg)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 12,
-                            }}>
-                                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>
-                                    🤝 Partner Registration
-                                </label>
-                                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, marginTop: 0 }}>
-                                    Enter your partner's email to register as a doubles pair.
-                                </p>
-
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <input
-                                        type="email"
-                                        className="form-input"
-                                        placeholder="partner@email.com"
-                                        value={partnerEmail}
-                                        onChange={(e) => {
-                                            setPartnerEmail(e.target.value);
-                                            if (partnerInfo) {
-                                                setPartnerInfo(null);
-                                            }
-                                            if (partnerError) {
-                                                setPartnerError('');
-                                            }
-                                        }}
-                                        disabled={verifyingPartner || isLoading}
-                                        style={{ flex: 1 }}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                handleVerifyPartner();
-                                            }
-                                        }}
-                                    />
-                                    <button
-                                        className="btn-outline"
-                                        onClick={handleVerifyPartner}
-                                        disabled={verifyingPartner || !partnerEmail.trim() || isLoading}
-                                        style={{
-                                            whiteSpace: 'nowrap',
-                                            padding: '8px 16px',
-                                            fontSize: 13,
-                                            opacity: (verifyingPartner || !partnerEmail.trim()) ? 0.6 : 1,
-                                        }}
-                                    >
-                                        {verifyingPartner ? '⏳ Checking...' : '🔍 Verify'}
-                                    </button>
-                                </div>
-
-                                {/* Partner error */}
-                                {partnerError && (
-                                    <div style={{
-                                        marginTop: 10,
-                                        padding: '8px 12px',
-                                        background: 'var(--danger-bg)',
-                                        border: '1px solid var(--danger-border)',
-                                        borderRadius: 8,
-                                    }}>
-                                        <p style={{ fontSize: 12, color: 'var(--danger-text)', margin: 0 }}>
-                                            ❌ {partnerError}
-                                        </p>
-                                    </div>
-                                )}
-
-                                {/* Partner found card */}
-                                {partnerInfo && (
-                                    <div style={{
-                                        marginTop: 10,
-                                        padding: '10px 14px',
-                                        background: 'var(--status-finished-bg)',
-                                        border: '1px solid var(--status-finished-border)',
-                                        borderRadius: 8,
-                                    }}>
-                                        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--status-finished-text)', margin: '0 0 4px' }}>
-                                            ✅ Partner Found
-                                        </p>
-                                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0' }}>
-                                            <strong>Name:</strong> {partnerInfo.name}
-                                        </p>
-                                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0' }}>
-                                            <strong>Gender:</strong> {partnerInfo.gender || 'Not set'}
-                                        </p>
-                                        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0' }}>
-                                            <strong>Email:</strong> {partnerInfo.email}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </>
-                ) : (
-                    <div className="alert-error" style={{ marginBottom: 20 }}>
-                        <p style={{ margin: 0, fontSize: 13 }}>
-                            {ageBlockedCategories.length > 0
-                                ? `Tidak ada kategori yang sesuai untuk umur kamu (${playerAge} tahun) dan gender (${user?.gender || 'Unknown'}). Kategori yang tersedia membutuhkan kelompok umur: ${ageBlockedCategories.map(c => getAgeGroupLabel(c)).join(', ')}.`
-                                : `There are no suitable categories available for your gender (${user?.gender || 'Unknown'}).`
-                            }
-                        </p>
-                    </div>
-                )}
-
-                <div style={{
-                    padding: 12,
-                    background: 'var(--status-scheduled-bg)',
-                    border: '1px solid var(--status-scheduled-border)',
-                    borderRadius: 8,
-                    marginBottom: 20,
-                }}>
-                    <p style={{ fontSize: 12, color: 'var(--status-scheduled-text)', margin: 0 }}>
-                        ℹ️ Your profile data (name, date of birth, gender: {user?.gender}) will be used for registration.
-                        {isDoubles && partnerInfo && (
-                            <> Your team will be registered as <strong>"{user?.name?.split(' ').pop()} / {partnerInfo.name.split(' ').pop()}"</strong>.</>
-                        )}
-                    </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                        className="btn-primary"
-                        onClick={() => onConfirm(selectedCategoryId, isDoubles && partnerInfo ? partnerEmail.trim() : null)}
-                        disabled={isLoading || !canRegister}
-                        style={{ flex: 1, opacity: (isLoading || !canRegister) ? 0.7 : 1 }}
-                    >
-                        {isLoading ? 'Registering...' : '✅ Yes, Register Now'}
-                    </button>
-                    <button
-                        className="btn-outline"
-                        onClick={onClose}
-                        disabled={isLoading}
-                    >
-                        Cancel
-                    </button>
-                </div>
+            <div className="form-group">
+              <label className="form-label">Category</label>
+              <select className="form-input" value={selectedCategoryId} onChange={e => setSelectedCategoryId(e.target.value)}>
+                {eligibleCategories.map(cat => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name} — {cat.type}
+                    {cat.maxParticipants ? ` (${cat.currentParticipants || 0}/${cat.maxParticipants})` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
-        </>
-    );
+
+            {isDoubles && (
+              <div className="form-group">
+                <label className="form-label">Partner Email</label>
+                <input
+                  type="email" className="form-input"
+                  placeholder="partner@example.com"
+                  value={partnerEmail}
+                  onChange={e => setPartnerEmail(e.target.value)}
+                />
+                <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
+                  Your partner must already have an account.
+                </p>
+              </div>
+            )}
+
+            {isFull && (
+              <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: 12.5, color: '#ef4444', marginBottom: 12 }}>
+                This category is full.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button
+                className="btn-primary"
+                onClick={() => onConfirm(selectedCategoryId ? parseInt(selectedCategoryId) : null, partnerEmail || undefined)}
+                disabled={isLoading || isFull || !selectedCategoryId}
+                style={{ flex: 1, padding: '9px 14px', fontSize: 13 }}
+              >
+                {isLoading ? 'Registering…' : 'Confirm Registration'}
+              </button>
+              <button
+                className="btn-outline"
+                onClick={onClose}
+                disabled={isLoading}
+                style={{ padding: '9px 14px', fontSize: 13 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
+function PlayerDashboard() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [myTournaments, setMyTournaments] = useState([]);
+  const [availableTournaments, setAvailableTournaments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [registering, setRegistering] = useState(null);
+  const [showRegisterModal, setShowRegisterModal] = useState(null);
+
+  useEffect(() => { fetchData(); }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const [myData, allData] = await Promise.all([
+        participantsApi.getMyTournaments(),
+        tournamentsApi.getTournaments(),
+      ]);
+      setMyTournaments(myData);
+      const myIds = new Set(myData.map(t => t.id));
+      setAvailableTournaments(allData.filter(t => !myIds.has(t.id)));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (tournament, categoryId, partnerEmail) => {
+    setRegistering(tournament.id);
+    try {
+      const payload = { tournamentId: tournament.id, categoryId: categoryId || tournament.categories?.[0]?.id || null };
+      if (partnerEmail) payload.partnerEmail = partnerEmail;
+      await participantsApi.selfRegister(payload);
+      await fetchData();
+      setShowRegisterModal(null);
+    } catch (err) {
+      alert(err.message || 'Registration failed');
+    } finally {
+      setRegistering(null);
+    }
+  };
+
+  const stats = {
+    joined:   myTournaments.length,
+    ongoing:  myTournaments.filter(t => t.status === 'ONGOING').length,
+    upcoming: myTournaments.filter(t => t.status === 'DRAFT').length,
+    finished: myTournaments.filter(t => t.status === 'FINISHED').length,
+  };
+
+  if (loading) {
+    return (
+      <div className="main-content" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
+        <div className="spinner" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="main-content">
+
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 32 }}>
+        <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 8px' }}>
+          Player Portal
+        </p>
+        <h1 className="page-title">{user?.name}</h1>
+        <p className="page-subtitle" style={{ marginTop: 6 }}>
+          Track your tournaments and register for new ones.
+        </p>
+      </div>
+
+      {error && <div className="alert-error" style={{ marginBottom: 20 }}>{error}</div>}
+
+      {/* ── Stats ── */}
+      <div className="stat-grid" style={{ marginBottom: 36 }}>
+        <StatCard label="Joined" value={stats.joined} sub="tournaments" />
+        <StatCard label="Ongoing" value={stats.ongoing} sub="active now" />
+        <StatCard label="Upcoming" value={stats.upcoming} sub="in draft" />
+        <StatCard label="Completed" value={stats.finished} sub="finished" />
+      </div>
+
+      {/* ── My Tournaments ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 className="section-title">My Tournaments</h2>
+        {myTournaments.length > 0 && (
+          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{myTournaments.length} total</span>
+        )}
+      </div>
+
+      {myTournaments.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '40px 24px',
+          background: 'var(--bg-card)', borderRadius: 14,
+          border: '1.5px dashed var(--border)', marginBottom: 36,
+        }}>
+          <div style={{ fontSize: 36, marginBottom: 10, opacity: 0.5 }}>🏸</div>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+            No tournaments yet
+          </p>
+          <p style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>
+            Register below to join your first tournament.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 40 }}>
+          {myTournaments.map(t => (
+            <TournamentCard key={t.id} tournament={t} onView={() => navigate(`/tournament/${t.id}`)} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Available Tournaments ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h2 className="section-title">Available to Join</h2>
+        {availableTournaments.length > 0 && (
+          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{availableTournaments.length} tournaments</span>
+        )}
+      </div>
+      <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 16 }}>
+        Tournaments open for registration. Only DRAFT tournaments accept new players.
+      </p>
+
+      {availableTournaments.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '40px 24px',
+          background: 'var(--bg-card)', borderRadius: 14,
+          border: '1.5px dashed var(--border)',
+        }}>
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>No tournaments available right now.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          {availableTournaments.map(t => (
+            <AvailableTournamentCard
+              key={t.id}
+              tournament={t}
+              onRegister={() => setShowRegisterModal(t)}
+              isRegistering={registering === t.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Register Modal ── */}
+      {showRegisterModal && (
+        <RegisterModal
+          tournament={showRegisterModal}
+          user={user}
+          onConfirm={(catId, partnerEmail) => handleRegister(showRegisterModal, catId, partnerEmail)}
+          onClose={() => setShowRegisterModal(null)}
+          isLoading={registering === showRegisterModal.id}
+        />
+      )}
+    </div>
+  );
+}
 
 export default PlayerDashboard;

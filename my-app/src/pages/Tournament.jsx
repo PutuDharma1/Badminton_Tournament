@@ -269,7 +269,16 @@ function TournamentManagement() {
       <div style={{ marginBottom: 24 }}>
         <button
           onClick={() => navigate('/committee')}
-          style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: 14, marginBottom: 8, padding: 0 }}
+          style={{
+            background: 'none', border: 'none',
+            color: 'var(--text-muted)', cursor: 'pointer',
+            fontSize: 12.5, fontWeight: 600, marginBottom: 10, padding: 0,
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            letterSpacing: '0.02em',
+            transition: 'color 0.15s ease',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
         >
           ← Back to Dashboard
         </button>
@@ -300,8 +309,8 @@ function TournamentManagement() {
       {/* Status Banner */}
       <div style={{
         padding: '12px 16px', borderRadius: 12, marginBottom: 24,
-        background: isOngoing ? 'var(--status-ongoing-bg)' : isFinished ? 'var(--status-finished-bg)' : 'var(--status-scheduled-bg)',
-        border: isOngoing ? '1px solid var(--status-ongoing-border)' : isFinished ? '1px solid var(--status-finished-border)' : '1px solid var(--status-scheduled-border)',
+        background: isOngoing ? 'rgba(194,65,12,0.07)' : isFinished ? 'rgba(21,128,61,0.07)' : 'rgba(59,130,246,0.07)',
+        border: isOngoing ? '1.5px solid rgba(249,115,22,0.3)' : isFinished ? '1.5px solid rgba(34,197,94,0.3)' : '1.5px solid rgba(96,165,250,0.3)',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <StatusBadge status={tournament.status} />
@@ -322,7 +331,7 @@ function TournamentManagement() {
         <div className="stat-card">
           <div className="stat-header"><span className="stat-label">Participants</span></div>
           <div className="stat-value">{participantCount}</div>
-          <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 4 }}>
             {canStartRoundRobin ? '✓ Ready for round-robin' : tournament.status === 'DRAFT' ? `Need ${Math.max(0, 4 - participantCount)} more` : ''}
           </p>
         </div>
@@ -339,23 +348,35 @@ function TournamentManagement() {
       </div>
 
       {/* Tabs */}
-      <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 16, overflowX: 'auto' }}>
+      <div style={{ borderBottom: '1.5px solid var(--border)', marginBottom: 24, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', gap: 4 }}>
           {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
-                background: 'none', border: 'none', padding: '12px 0',
-                color: activeTab === tab ? 'var(--text-link)' : 'var(--text-muted)',
-                borderBottom: activeTab === tab ? '2px solid var(--text-link)' : '2px solid transparent',
-                cursor: 'pointer', fontSize: 14, fontWeight: 500, textTransform: 'capitalize',
-                whiteSpace: 'nowrap',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '10px 14px',
+                background: 'none', border: 'none',
+                borderBottom: activeTab === tab ? '2px solid var(--accent)' : '2px solid transparent',
+                marginBottom: '-1.5px',
+                cursor: 'pointer', fontSize: 13.5,
+                fontWeight: activeTab === tab ? 600 : 500,
+                color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)',
+                transition: 'color 0.15s ease, border-color 0.15s ease',
+                whiteSpace: 'nowrap', textTransform: 'capitalize',
               }}
             >
-              {tab === 'leaderboard' ? '🏆 Leaderboard' : tab === 'bracket' ? '🏅 Bracket' : tab}
-              {tab === 'participants' && ` (${participantCount})`}
-              {tab === 'matches' && ` (${matchCount})`}
+              {tab === 'leaderboard' ? 'Leaderboard' : tab === 'bracket' ? 'Bracket' : tab}
+              {(tab === 'participants' || tab === 'matches') && (
+                <span style={{
+                  padding: '1px 6px', borderRadius: 5, fontSize: 11, fontWeight: 600,
+                  background: activeTab === tab ? 'rgba(var(--accent-rgb,21,128,61),0.12)' : 'var(--bg-subtle)',
+                  color: activeTab === tab ? 'var(--accent)' : 'var(--text-faint)',
+                }}>
+                  {tab === 'participants' ? participantCount : matchCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -447,7 +468,7 @@ function TournamentManagement() {
 
           {participantCount === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-              <p style={{ color: '#9ca3af', marginBottom: 16 }}>No participants yet.</p>
+              <p style={{ color: 'var(--text-faint)', marginBottom: 16 }}>No participants yet.</p>
               {isCommittee && !isOngoing && (
                 <button className="btn-primary" onClick={() => setShowAddPlayerModal(true)}>Add First Player</button>
               )}
@@ -500,7 +521,7 @@ function TournamentManagement() {
 
                   return (
                   <div key={catId} className="card">
-                    <h4 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)', color: 'var(--text)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h4 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span>{getCatName(catId)} ({isDouble ? `${rows.length} teams` : grouped[catId].length})</span>
                       {capacity && (
                         <span style={{
@@ -513,14 +534,14 @@ function TournamentManagement() {
                         </span>
                       )}
                     </h4>
-                    <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
+                    <table style={{ width: '100%', fontSize: 13.5, borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid #334155' }}>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500, width: 40 }}>#</th>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>{isDouble ? 'Team' : 'ID'}</th>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>{isDouble ? 'Players' : 'Name'}</th>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Gender</th>
-                          <th style={{ textAlign: 'left', padding: '8px 12px', color: '#9ca3af', fontWeight: 500 }}>Status</th>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-faint)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', width: 40 }}>#</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-faint)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{isDouble ? 'Team' : 'ID'}</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-faint)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{isDouble ? 'Players' : 'Name'}</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-faint)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gender</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-faint)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -680,8 +701,8 @@ function MatchesTab({
   if (tournament.status === 'DRAFT') {
     return (
       <div className="card" style={{ textAlign: 'center', padding: 40 }}>
-        <p style={{ color: '#9ca3af', marginBottom: 8 }}>No matches scheduled yet.</p>
-        <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
+        <p style={{ color: 'var(--text-muted)', marginBottom: 8 }}>No matches scheduled yet.</p>
+        <p style={{ color: 'var(--text-faint)', fontSize: 13, marginBottom: 20 }}>
           Matches are generated when you start the round-robin. Players will be divided into groups of ~4.
         </p>
         {canStartRoundRobin && (
@@ -761,7 +782,7 @@ function MatchesTab({
         </div>
       ) : matches.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-          <p style={{ color: '#9ca3af' }}>No matches on this day.</p>
+          <p style={{ color: 'var(--text-faint)' }}>No matches on this day.</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 14 }}>
@@ -925,14 +946,14 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <span style={{
               fontSize: 15, fontWeight: 600,
-              color: isWinnerHome ? '#16a34a' : isWinnerAway ? '#9ca3af' : 'currentColor'
+              color: isWinnerHome ? 'var(--accent)' : isWinnerAway ? 'var(--text-faint)' : 'var(--text-primary)'
             }}>
               {isWinnerHome && '🏆 '}{homeTeamName}
             </span>
             <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>vs</span>
             <span style={{
               fontSize: 15, fontWeight: 600,
-              color: isWinnerAway ? '#16a34a' : isWinnerHome ? '#9ca3af' : 'currentColor'
+              color: isWinnerAway ? 'var(--accent)' : isWinnerHome ? 'var(--text-faint)' : 'var(--text-primary)'
             }}>
               {isWinnerAway && '🏆 '}{awayTeamName}
             </span>
@@ -971,9 +992,9 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
           </div>
           {/* Games won summary */}
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Sets won: <strong style={{ color: 'var(--text-link)' }}>{match.homeScore}</strong>
+            Sets won: <strong style={{ color: 'var(--accent)' }}>{match.homeScore}</strong>
             {' – '}
-            <strong style={{ color: 'var(--text-link)' }}>{match.awayScore}</strong>
+            <strong style={{ color: 'var(--accent)' }}>{match.awayScore}</strong>
           </div>
         </div>
       )}
@@ -989,9 +1010,9 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
           {/* Column headers */}
           <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 20px 1fr', gap: 8, marginBottom: 6 }}>
             <div></div>
-            <span style={{ fontSize: 12, color: '#60a5fa', textAlign: 'center', fontWeight: 600 }}>{homeTeamName}</span>
+            <span style={{ fontSize: 12, color: 'var(--accent)', textAlign: 'center', fontWeight: 600 }}>{homeTeamName}</span>
             <div></div>
-            <span style={{ fontSize: 12, color: '#60a5fa', textAlign: 'center', fontWeight: 600 }}>{awayTeamName}</span>
+            <span style={{ fontSize: 12, color: 'var(--accent)', textAlign: 'center', fontWeight: 600 }}>{awayTeamName}</span>
           </div>
 
           {sets.map((s, idx) => (
@@ -1052,7 +1073,7 @@ function MatchCard({ match, isCommittee, onUpdate, showToast }) {
             <button
               onClick={() => setShowRefereeModal(true)}
               style={{
-                background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer',
+                background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
                 fontSize: 12, marginLeft: 8, padding: 0, textDecoration: 'underline',
               }}
             >
@@ -1154,18 +1175,18 @@ function RefereeAssignModal({ matchId, onClose, onSuccess, showToast }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-        background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24,
-        maxWidth: 380, width: '90%', zIndex: 1000,
+        background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 16, padding: 24,
+        maxWidth: 380, width: '90%', zIndex: 1000, boxShadow: 'var(--shadow-modal)',
       }}>
         <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Assign Referee</h3>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner"></div></div>
         ) : referees.length === 0 ? (
-          <p style={{ color: '#9ca3af' }}>No referees available.</p>
+          <p style={{ color: 'var(--text-faint)' }}>No referees available.</p>
         ) : (
           <div style={{ marginBottom: 16, maxHeight: 200, overflow: 'auto', display: 'grid', gap: 8 }}>
             {referees.map(r => (
@@ -1174,12 +1195,12 @@ function RefereeAssignModal({ matchId, onClose, onSuccess, showToast }) {
                 onClick={() => setSelected(r)}
                 style={{
                   padding: 12, borderRadius: 8, cursor: 'pointer',
-                  border: selected?.id === r.id ? '1px solid var(--text-link)' : '1px solid var(--border)',
+                  border: selected?.id === r.id ? '1px solid var(--accent)' : '1px solid var(--border)',
                   background: selected?.id === r.id ? 'var(--status-scheduled-bg)' : 'var(--bg-subtle)',
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{r.name}</div>
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>{r.email}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>{r.email}</div>
               </div>
             ))}
           </div>
@@ -1211,11 +1232,11 @@ function RetireModal({ match, onClose, onRetire, saving }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-        background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24,
-        maxWidth: 420, width: '90%', zIndex: 1000,
+        background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 16, padding: 24,
+        maxWidth: 420, width: '90%', zIndex: 1000, boxShadow: 'var(--shadow-modal)',
       }}>
         <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>🏳️ Retire / Walk Out</h3>
 
@@ -1327,10 +1348,10 @@ function EditTournamentModal({ tournament, onClose, onSave }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-        background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24,
+        background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 16, padding: 24, boxShadow: 'var(--shadow-modal)',
         maxWidth: 480, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000,
       }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20 }}>Edit Tournament</h2>
@@ -1511,14 +1532,14 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
         position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-        background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24,
+        background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 16, padding: 24, boxShadow: 'var(--shadow-modal)',
         maxWidth: 520, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000,
       }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Manage Categories</h2>
-        <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-faint)', marginBottom: 20 }}>
           Create categories by selecting age group, gender, and format type.
         </p>
 
@@ -1627,7 +1648,7 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
             background: 'var(--status-scheduled-bg)', border: '1px solid var(--status-scheduled-border)',
           }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-              📋 Category name: <strong style={{ color: 'var(--text)' }}>{previewName}</strong>
+              📋 Category name: <strong style={{ color: 'var(--text-primary)' }}>{previewName}</strong>
             </p>
           </div>
           
@@ -1800,8 +1821,8 @@ function AddPlayerModal({ tournament, participants, onClose, onSuccess }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 999 }} />
-      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'var(--modal-bg)', border: '1px solid var(--modal-border)', borderRadius: 16, padding: 24, maxWidth: 500, width: '90%', maxHeight: '90vh', overflow: 'auto', zIndex: 1000}}>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 16, padding: 24, boxShadow: 'var(--shadow-modal)', maxWidth: 500, width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 1000}}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Add Player</h2>
         
         {error && <div style={{ padding: 12, background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: 8, marginBottom: 16, color: '#f87171', fontSize: 14 }}>{error}</div>}
@@ -1862,11 +1883,11 @@ function GroupsTab({ groups, groupCategories, loading }) {
     <div key={group.code} className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div style={{
         padding: '12px 16px',
-        background: 'rgba(96,165,250,0.1)',
+        background: 'rgba(var(--accent-rgb,21,128,61),0.07)',
         borderBottom: '1px solid var(--border)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: '#60a5fa' }}>
+        <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--accent)' }}>
           Group {group.code}
         </h4>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -1903,7 +1924,7 @@ function GroupsTab({ groups, groupCategories, loading }) {
             <h3 style={{
               fontSize: 17, fontWeight: 700, marginBottom: 16,
               paddingBottom: 8, borderBottom: '2px solid var(--border)',
-              color: 'var(--text)',
+              color: 'var(--text-primary)',
             }}>
               {cat.categoryName}
             </h3>
@@ -1968,9 +1989,9 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
         {groupCode && (
           <div style={{
             padding: '8px 16px',
-            background: 'rgba(96,165,250,0.1)',
+            background: 'rgba(var(--accent-rgb,21,128,61),0.07)',
             borderBottom: '1px solid var(--border)',
-            fontSize: 14, fontWeight: 700, color: '#60a5fa',
+            fontSize: 14, fontWeight: 700, color: 'var(--accent)',
           }}>
             Group {groupCode}
           </div>
@@ -1984,7 +2005,7 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
                 {COL.map(c => (
                   <th key={c.key} title={c.title} style={{
                     padding: '10px 12px', textAlign: 'center',
-                    color: c.highlight ? 'var(--text-link)' : 'var(--table-header-text)',
+                    color: c.highlight ? 'var(--accent)' : 'var(--table-header-text)',
                     fontWeight: c.highlight ? 700 : 600, cursor: 'help', minWidth: 44,
                   }}>{c.label}</th>
                 ))}
@@ -2022,7 +2043,7 @@ function LeaderboardTab({ tournament, leaderboard, loading, onRefresh }) {
                         padding: '10px 12px', textAlign: 'center',
                         fontWeight: c.highlight ? 700 : 400,
                         color: c.highlight
-                          ? 'var(--text-link)'
+                          ? 'var(--accent)'
                           : c.key === 'SD' || c.key === 'PD'
                             ? row[c.key] > 0 ? '#16a34a' : row[c.key] < 0 ? 'var(--danger-text)' : 'var(--text-muted)'
                             : 'currentColor',
