@@ -20,7 +20,7 @@ from routes.tournament import tournament_blueprint
 from routes.court import court_blueprint
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=[os.getenv('FRONTEND_URL', 'http://localhost:5173')])
 
 # Configuration
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'super-secret-key-change-this')
