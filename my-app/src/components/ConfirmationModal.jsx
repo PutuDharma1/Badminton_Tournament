@@ -1,7 +1,9 @@
+import { createPortal } from 'react-dom';
+
 function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', isDangerous = false }) {
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <>
       <div
         className="modal-overlay"
@@ -57,7 +59,8 @@ function ConfirmationModal({ isOpen, title, message, onConfirm, onCancel, confir
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

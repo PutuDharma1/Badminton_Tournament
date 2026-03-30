@@ -231,7 +231,7 @@ function MatchTable({ matches, isMyMatch, onPick, picking, checkDisablePick, onM
                 {/* Schedule & Court */}
                 <td style={{ padding: "12px 8px", color: 'var(--text-secondary)' }}>
                   <div>{m.scheduledAt ? new Date(m.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD'}</div>
-                  <span className="text-xs font-semibold text-green-700 dark:text-green-400">
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)' }}>
                     {m.court?.name ? m.court.name : m.courtId ? `Court ${m.courtId}` : 'Court TBD'}
                   </span>
                 </td>

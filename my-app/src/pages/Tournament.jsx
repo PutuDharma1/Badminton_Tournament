@@ -287,7 +287,7 @@ function TournamentManagement() {
           <div>
             <h1 className="page-title">{tournament.name}</h1>
             <p className="page-subtitle">
-              📍 {tournament.location} &nbsp;•&nbsp; 📅 {new Date(tournament.startDate).toLocaleDateString()}
+              {tournament.location} &nbsp;&middot;&nbsp; {new Date(tournament.startDate).toLocaleDateString()}
             </p>
           </div>
 

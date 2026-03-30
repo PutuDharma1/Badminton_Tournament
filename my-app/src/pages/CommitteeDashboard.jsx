@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
+import { MapPin, Calendar, Users, ArrowRight, Trophy } from 'lucide-react';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -64,7 +65,7 @@ function TournamentCard({ tournament, onView, onDelete }) {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <h3 style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "'Sora', sans-serif",
           fontSize: 16, fontWeight: 700,
           letterSpacing: '-0.01em',
           color: 'var(--text-primary)',
@@ -86,17 +87,19 @@ function TournamentCard({ tournament, onView, onDelete }) {
       </div>
 
       {/* Meta */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {[
-          { icon: '📍', text: tournament.location },
-          { icon: '📅', text: startDate },
-          { icon: '👥', text: `${tournament.participantCount || 0} participants · ${tournament.matchCount || 0} matches` },
-        ].map(({ icon, text }) => (
-          <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
-            <span style={{ width: 16, textAlign: 'center', fontSize: 13, flexShrink: 0 }}>{icon}</span>
-            <span>{text}</span>
-          </div>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <MapPin size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.location}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <Calendar size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{startDate}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <Users size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.participantCount || 0} participants &middot; {tournament.matchCount || 0} matches</span>
+        </div>
       </div>
 
       {/* Actions */}
@@ -252,7 +255,7 @@ function CreateTournamentModal({ onClose, onSuccess }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
             <h2 style={{
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "'Sora', sans-serif",
               fontSize: 21, fontWeight: 700,
               letterSpacing: '-0.02em',
               color: 'var(--text-primary)',
@@ -505,9 +508,11 @@ function CommitteeDashboard() {
           borderRadius: 14,
           border: '1.5px dashed var(--border)',
         }}>
-          <div style={{ fontSize: 44, marginBottom: 14, opacity: 0.6 }}>🏆</div>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: 'var(--bg-subtle)', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+            <Trophy size={24} />
+          </div>
           <p style={{
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'Sora', sans-serif",
             fontSize: 17, fontWeight: 600,
             color: 'var(--text-secondary)', marginBottom: 8,
           }}>
@@ -521,7 +526,7 @@ function CommitteeDashboard() {
           </button>
         </div>
       ) : (
-        <div style={{
+        <div className="stagger-in" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
           gap: 14,

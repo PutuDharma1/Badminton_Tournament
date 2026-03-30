@@ -174,7 +174,7 @@ function Register() {
             </svg>
           </div>
           <div>
-            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>SportHive</div>
+            <div style={{ fontFamily: "'Sora', sans-serif", fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>SportHive</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 2 }}>Badminton</div>
           </div>
         </div>
@@ -182,7 +182,7 @@ function Register() {
         {/* Headline */}
         <div style={{ position: 'relative', zIndex: 1 }}>
           <h2 style={{
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'Sora', sans-serif",
             fontSize: 36, fontWeight: 800,
             color: '#fff', lineHeight: 1.15,
             letterSpacing: '-0.03em', marginBottom: 16,
@@ -222,7 +222,7 @@ function Register() {
           </div>
 
           <h1 style={{
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'Sora', sans-serif",
             fontSize: 28, fontWeight: 700,
             letterSpacing: '-0.025em',
             color: 'var(--text-primary)',

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
 import participantsApi from '../api/participants';
+import { MapPin, Calendar, Users, Clock } from 'lucide-react';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -54,7 +55,7 @@ function TournamentCard({ tournament, onView }) {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <h3 style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "'Sora', sans-serif",
           fontSize: 15, fontWeight: 700,
           color: 'var(--text-primary)', margin: 0, flex: 1, lineHeight: 1.3,
         }}>
@@ -73,17 +74,19 @@ function TournamentCard({ tournament, onView }) {
         </span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {[
-          { icon: '📍', text: tournament.location },
-          { icon: '📅', text: startDate },
-          { icon: '👥', text: `${tournament.participantCount || 0} participants` },
-        ].map(({ icon, text }) => (
-          <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-            <span style={{ width: 15, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
-            <span>{text}</span>
-          </div>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+          <MapPin size={12} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.location}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+          <Calendar size={12} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{startDate}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+          <Users size={12} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.participantCount || 0} participants</span>
+        </div>
       </div>
 
       <div style={{ marginTop: 4 }}>
@@ -127,7 +130,7 @@ function AvailableTournamentCard({ tournament, onRegister, isRegistering }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <h3 style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "'Sora', sans-serif",
           fontSize: 15, fontWeight: 700,
           color: 'var(--text-primary)', margin: 0, flex: 1, lineHeight: 1.3,
         }}>
@@ -152,18 +155,25 @@ function AvailableTournamentCard({ tournament, onRegister, isRegistering }) {
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {[
-          { icon: '📍', text: tournament.location },
-          { icon: '📅', text: startDate },
-          { icon: '👥', text: `${tournament.participantCount || 0} registered` },
-          ...(deadline ? [{ icon: '⏰', text: `Deadline: ${deadline}`, red: deadlinePassed }] : []),
-        ].map(({ icon, text, red }) => (
-          <div key={icon} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: red ? '#f87171' : 'var(--text-muted)' }}>
-            <span style={{ width: 15, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
-            <span>{text}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+          <MapPin size={12} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.location}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+          <Calendar size={12} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{startDate}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+          <Users size={12} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.participantCount || 0} registered</span>
+        </div>
+        {deadline && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: deadlinePassed ? '#f87171' : 'var(--text-muted)' }}>
+            <Clock size={12} style={{ flexShrink: 0, color: deadlinePassed ? '#f87171' : 'var(--text-faint)' }} />
+            <span>Deadline: {deadline}</span>
           </div>
-        ))}
+        )}
       </div>
 
       {/* Category tags */}
@@ -256,7 +266,7 @@ function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
-            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 700, margin: '0 0 4px', color: 'var(--text-primary)' }}>
+            <h2 style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, margin: '0 0 4px', color: 'var(--text-primary)' }}>
               Register
             </h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{tournament.name}</p>
@@ -436,7 +446,9 @@ function PlayerDashboard() {
           background: 'var(--bg-card)', borderRadius: 14,
           border: '1.5px dashed var(--border)', marginBottom: 36,
         }}>
-          <div style={{ fontSize: 36, marginBottom: 10, opacity: 0.5 }}>🏸</div>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--bg-subtle)', margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+            <Calendar size={22} />
+          </div>
           <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
             No tournaments yet
           </p>
@@ -445,7 +457,7 @@ function PlayerDashboard() {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 40 }}>
+        <div className="stagger-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14, marginBottom: 40 }}>
           {myTournaments.map(t => (
             <TournamentCard key={t.id} tournament={t} onView={() => navigate(`/tournament/${t.id}`)} />
           ))}

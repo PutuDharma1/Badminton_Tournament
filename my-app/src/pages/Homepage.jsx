@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
+import { MapPin, Calendar, Users, Target, User, Scale, ArrowRight } from 'lucide-react';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -30,7 +31,7 @@ function ActionCard({ icon, label, description, onClick }) {
         border: '1.5px solid var(--border)',
         borderRadius: 13,
         cursor: 'pointer',
-        transition: 'all 0.2s ease',
+        transition: 'all 0.25s ease',
         textAlign: 'left',
         boxShadow: 'var(--shadow-card)',
         flex: '1 1 200px',
@@ -50,9 +51,9 @@ function ActionCard({ icon, label, description, onClick }) {
       <div style={{
         width: 40, height: 40,
         borderRadius: 10,
-        background: 'rgba(var(--accent-rgb, 21, 128, 61), 0.1)',
+        background: 'rgba(var(--accent-rgb), 0.1)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 20, flexShrink: 0,
+        color: 'var(--accent)', flexShrink: 0,
       }}>
         {icon}
       </div>
@@ -87,13 +88,13 @@ function TournamentCard({ tournament, onClick }) {
       onClick={onClick}
       style={{
         background: 'var(--bg-card)',
-        border: '1.5px solid var(--border)',
+        border: '1px solid var(--border)',
         borderLeft: `3px solid ${accent}`,
         borderRadius: 14,
         padding: '18px 18px 16px',
         cursor: 'pointer',
         boxShadow: 'var(--shadow-card)',
-        transition: 'box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease',
+        transition: 'box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease',
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -112,7 +113,7 @@ function TournamentCard({ tournament, onClick }) {
       {/* Top row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <h3 style={{
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "'Sora', sans-serif",
           fontSize: 16, fontWeight: 700,
           letterSpacing: '-0.01em',
           color: 'var(--text-primary)',
@@ -121,7 +122,6 @@ function TournamentCard({ tournament, onClick }) {
         }}>
           {tournament.name}
         </h3>
-        {/* Status badge */}
         <span style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -143,20 +143,19 @@ function TournamentCard({ tournament, onClick }) {
       </div>
 
       {/* Meta info */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {[
-          { icon: '📍', text: tournament.location },
-          { icon: '📅', text: startDate },
-          { icon: '👥', text: `${tournament.participantCount || 0} participants` },
-        ].map(({ icon, text }) => (
-          <div key={icon} style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            fontSize: 12.5, color: 'var(--text-muted)',
-          }}>
-            <span style={{ width: 16, textAlign: 'center', flexShrink: 0, fontSize: 13 }}>{icon}</span>
-            <span>{text}</span>
-          </div>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <MapPin size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.location}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <Calendar size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{startDate}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <Users size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <span>{tournament.participantCount || 0} participants</span>
+        </div>
       </div>
 
       {/* Description */}
@@ -182,14 +181,15 @@ function TournamentCard({ tournament, onClick }) {
         borderTop: '1px solid var(--border)',
         display: 'flex',
         justifyContent: 'flex-end',
+        alignItems: 'center',
       }}>
         <span style={{
-          fontSize: 13,
-          fontWeight: 600,
+          display: 'flex', alignItems: 'center', gap: 4,
+          fontSize: 13, fontWeight: 600,
           color: 'var(--accent)',
           letterSpacing: '0.01em',
         }}>
-          View details →
+          View details <ArrowRight size={14} />
         </span>
       </div>
     </article>
@@ -231,8 +231,9 @@ function FilterTabs({ filter, onChange, counts }) {
             cursor: 'pointer',
             fontSize: 13.5,
             fontWeight: filter === tab.key ? 600 : 500,
+            fontFamily: 'var(--font-body)',
             color: filter === tab.key ? 'var(--accent)' : 'var(--text-muted)',
-            transition: 'color 0.15s ease, border-color 0.15s ease',
+            transition: 'color 0.2s ease, border-color 0.2s ease',
             whiteSpace: 'nowrap',
           }}
         >
@@ -242,7 +243,7 @@ function FilterTabs({ filter, onChange, counts }) {
             borderRadius: 5,
             fontSize: 11,
             fontWeight: 600,
-            background: filter === tab.key ? 'rgba(var(--accent-rgb, 21,128,61), 0.12)' : 'var(--bg-subtle)',
+            background: filter === tab.key ? 'rgba(var(--accent-rgb), 0.12)' : 'var(--bg-subtle)',
             color: filter === tab.key ? 'var(--accent)' : 'var(--text-faint)',
           }}>
             {tab.count}
@@ -338,10 +339,10 @@ export default function Homepage() {
           }}>
             Quick Actions
           </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div className="stagger-in" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {hasRole('COMMITTEE') && (
               <ActionCard
-                icon="🎯"
+                icon={<Target size={20} />}
                 label="Committee Dashboard"
                 description="Manage tournaments & schedule"
                 onClick={() => navigate('/committee')}
@@ -349,7 +350,7 @@ export default function Homepage() {
             )}
             {hasRole('PLAYER') && (
               <ActionCard
-                icon="🏸"
+                icon={<Users size={20} />}
                 label="My Tournaments"
                 description="View your registrations"
                 onClick={() => navigate('/player')}
@@ -357,14 +358,14 @@ export default function Homepage() {
             )}
             {hasRole('REFEREE') && (
               <ActionCard
-                icon="⚖️"
+                icon={<Scale size={20} />}
                 label="Referee Dashboard"
                 description="Manage your assigned matches"
                 onClick={() => navigate('/referee')}
               />
             )}
             <ActionCard
-              icon="👤"
+              icon={<User size={20} />}
               label="My Profile"
               description="View and update your info"
               onClick={() => navigate('/profile')}
@@ -406,9 +407,16 @@ export default function Homepage() {
           borderRadius: 14,
           border: '1.5px dashed var(--border)',
         }}>
-          <div style={{ fontSize: 44, marginBottom: 12, opacity: 0.6 }}>🏸</div>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14,
+            background: 'var(--bg-subtle)', margin: '0 auto 16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--text-faint)',
+          }}>
+            <Calendar size={24} />
+          </div>
           <p style={{
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'Sora', sans-serif",
             fontSize: 17, fontWeight: 600,
             color: 'var(--text-secondary)',
             marginBottom: 6,
@@ -432,7 +440,7 @@ export default function Homepage() {
           )}
         </div>
       ) : (
-        <div style={{
+        <div className="stagger-in" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
           gap: 14,

@@ -114,7 +114,7 @@ function Profile() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{
-              fontFamily: "'Outfit', sans-serif",
+              fontFamily: "'Sora', sans-serif",
               fontSize: 20, fontWeight: 700,
               color: 'var(--text-primary)',
               margin: '0 0 6px',
@@ -158,7 +158,7 @@ function Profile() {
           boxShadow: 'var(--shadow-card)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+            <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
               Personal Information
             </h3>
             {!isEditing ? (
@@ -246,7 +246,7 @@ function Profile() {
           padding: '18px 24px',
           boxShadow: 'var(--shadow-card)',
         }}>
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text-primary)' }}>
+          <h3 style={{ fontFamily: "'Sora', sans-serif", fontSize: 15, fontWeight: 700, margin: '0 0 12px', color: 'var(--text-primary)' }}>
             Account Actions
           </h3>
           <button

@@ -66,7 +66,7 @@ const S = {
     color: '#fff',
   },
   brandName: {
-    fontFamily: "'Outfit', sans-serif",
+    fontFamily: "'Sora', sans-serif",
     fontSize: 22,
     fontWeight: 700,
     color: '#fff',
@@ -84,7 +84,7 @@ const S = {
     zIndex: 1,
   },
   brandHeadline: {
-    fontFamily: "'Outfit', sans-serif",
+    fontFamily: "'Sora', sans-serif",
     fontSize: 36,
     fontWeight: 800,
     color: '#fff',
@@ -246,7 +246,7 @@ function Login() {
           </div>
 
           <h1 style={{
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'Sora', sans-serif",
             fontSize: 28, fontWeight: 700,
             letterSpacing: '-0.025em',
             color: 'var(--text-primary)',
