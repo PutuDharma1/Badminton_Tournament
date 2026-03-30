@@ -5,12 +5,14 @@ from extensions import db, bcrypt, jwt, migrate
 import os
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
-# Import models to ensure they are registered with SQLAlchemy
-import models 
+# Import models so SQLAlchemy registers them
+import models
 
-from routes.participant import participant_blueprint 
+# Import blueprints
+from routes.participant import participant_blueprint
 from routes.category import category_blueprint
 from routes.auth import auth_blueprint
 from routes.match import match_blueprint
@@ -19,22 +21,38 @@ from routes.standings import standings_blueprint
 from routes.tournament import tournament_blueprint
 from routes.court import court_blueprint
 
+# Create Flask app
 app = Flask(__name__)
+
+# Enable CORS for frontend
 CORS(app, origins=[os.getenv('FRONTEND_URL', 'http://localhost:5173')])
 
-# Configuration
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'super-secret-key-change-this')
-# Use postgresql:// instead of postgresql+psycopg2:// if preferred, but usually equivalent for this driver
-# Ensure we use the correct driver prefix if needed, but 'postgresql://' is standard in recent SQLA
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL').replace('postgresql://', 'postgresql+psycopg2://')
+# JWT configuration
+app.config['JWT_SECRET_KEY'] = os.getenv(
+    'JWT_SECRET_KEY',
+    'super-secret-key-change-this'
+)
+
+# Database configuration
+database_url = os.getenv("DATABASE_URL")
+
+if database_url and database_url.startswith("postgresql://"):
+    database_url = database_url.replace(
+        "postgresql://",
+        "postgresql+psycopg2://",
+        1
+    )
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize Extensions
+# Initialize extensions
 db.init_app(app)
 bcrypt.init_app(app)
 jwt.init_app(app)
 migrate.init_app(app, db)
 
+# Register blueprints
 app.register_blueprint(participant_blueprint)
 app.register_blueprint(category_blueprint)
 app.register_blueprint(auth_blueprint)
@@ -44,15 +62,15 @@ app.register_blueprint(standings_blueprint)
 app.register_blueprint(tournament_blueprint)
 app.register_blueprint(court_blueprint)
 
+# Basic route to test server
 @app.route('/')
 def hello_world():
-    return 'Hello, World!'
+    return 'Backend running successfully!'
 
-from sqlalchemy import text
-
-# ... (keep existing lines)
-
+# Run server
 if __name__ == '__main__':
+
+    # Test database connection
     with app.app_context():
         try:
             db.session.execute(text('SELECT 1'))
@@ -64,5 +82,9 @@ if __name__ == '__main__':
             print(" CONNECTION ERROR: Could not connect to the database")
             print(f" Details: {e}")
             print("!"*50 + "\n")
-    
-    app.run(debug=True)
+
+    # Railway requires dynamic PORT
+    port = int(os.environ.get("PORT", 5000))
+
+    # Start Flask server
+    app.run(host="0.0.0.0", port=port, debug=False)
