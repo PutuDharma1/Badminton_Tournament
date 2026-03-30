@@ -7,4 +7,5 @@ email_validator
 flask-bcrypt
 flask-jwt-extended
 python-dotenv
+gunicorn
 Faker
