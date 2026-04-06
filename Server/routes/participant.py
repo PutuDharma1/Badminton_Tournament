@@ -60,6 +60,11 @@ def create_participant():
                     g2 = data['player2']['gender'].upper()
                     if g2 != c_gender:
                         return jsonify({"error": f"Player 2 gender ({g2}) does not match category requirement ({c_gender})"}), 400
+            elif category and category.gender == 'MIXED' and is_double:
+                g1 = p1_data['gender'].upper()
+                g2 = data['player2']['gender'].upper()
+                if g1 == g2:
+                    return jsonify({"error": f"Mixed doubles requires one male and one female player. Both players are {g1}."}), 400
 
             # ── Validate age ──────────────────────────────────────────────
             if category:
@@ -326,9 +331,18 @@ def self_register():
             if existing_partner:
                 return jsonify({"error": f"{partner_user.name} is already registered in this tournament"}), 409
 
-            # Validate partner gender for non-MIXED categories
-            if category and category.gender != 'MIXED' and partner_user.gender and partner_user.gender.upper() != category.gender.upper():
-                return jsonify({"error": f"Partner's gender ({partner_user.gender}) does not match category requirement ({category.gender})"}), 400
+            # Validate partner gender
+            if category:
+                if category.gender == 'MIXED':
+                    # Mixed doubles requires one MALE and one FEMALE
+                    my_gender = (user.gender or '').upper()
+                    partner_gender = (partner_user.gender or '').upper()
+                    if my_gender == partner_gender:
+                        return jsonify({"error": f"Mixed doubles requires one male and one female player. Both players are {my_gender}."}), 400
+                    if my_gender not in ('MALE', 'FEMALE') or partner_gender not in ('MALE', 'FEMALE'):
+                        return jsonify({"error": "Both players must have a valid gender (MALE or FEMALE) set in their profile for mixed doubles."}), 400
+                elif partner_user.gender and partner_user.gender.upper() != category.gender.upper():
+                    return jsonify({"error": f"Partner's gender ({partner_user.gender}) does not match category requirement ({category.gender})"}), 400
 
             # Validate partner age
             if category and partner_user.birth_date:

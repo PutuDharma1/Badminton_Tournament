@@ -173,11 +173,14 @@ def run():
         print(" Creating Tournament 1: Siap di-Start Round-Robin")
         print("=" * 70)
 
+        # Use future dates so auto-finish doesn't trigger
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
         t1 = Tournament(
             name="Turnamen Merdeka Cup 2026",
             location="GOR Senayan, Jakarta",
-            start_date=datetime(2026, 4, 1),
-            end_date=datetime(2026, 4, 10),
+            start_date=today + timedelta(days=1),
+            end_date=today + timedelta(days=10),
             description="Tournament DRAFT — siap untuk klik Start Tournament dan generate round-robin.",
             status="DRAFT",
             current_stage=None,
@@ -238,8 +241,8 @@ def run():
         t2 = Tournament(
             name="Turnamen Pahlawan Open 2026",
             location="GOR Jatidiri, Semarang",
-            start_date=datetime(2026, 3, 20),
-            end_date=datetime(2026, 3, 30),
+            start_date=today - timedelta(days=5),
+            end_date=today + timedelta(days=10),
             description="Round-robin sudah selesai semua. Tinggal klik Generate Knockout Bracket.",
             status="ONGOING",
             current_stage="GROUP",
@@ -268,7 +271,8 @@ def run():
         BREAK_START = "12:00"
         BREAK_END = "13:00"
 
-        court_available = {c.id: datetime(2026, 3, 20, 9, 0) for c in courts2}
+        rr_base = (today - timedelta(days=5)).replace(hour=9, minute=0)
+        court_available = {c.id: rr_base for c in courts2}
         groups_by_cat = {}
 
         for age_group in AGE_GROUPS_TO_USE:
