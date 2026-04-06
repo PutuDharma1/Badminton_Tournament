@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
@@ -1173,7 +1174,7 @@ function RefereeAssignModal({ matchId, onClose, onSuccess, showToast }) {
     }
   };
 
-  return (
+  return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
@@ -1216,7 +1217,8 @@ function RefereeAssignModal({ matchId, onClose, onSuccess, showToast }) {
           <button className="btn-outline" onClick={onClose}>Cancel</button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -1230,7 +1232,7 @@ function RetireModal({ match, onClose, onRetire, saving }) {
 
   const winnerName = selectedTeamId === match.homeTeamId ? awayName : homeName;
 
-  return (
+  return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
@@ -1318,7 +1320,8 @@ function RetireModal({ match, onClose, onRetire, saving }) {
           <button className="btn-outline" onClick={onClose} disabled={saving}>Cancel</button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -1346,7 +1349,7 @@ function EditTournamentModal({ tournament, onClose, onSave }) {
     setLoading(false);
   };
 
-  return (
+  return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
@@ -1442,7 +1445,8 @@ function EditTournamentModal({ tournament, onClose, onSave }) {
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -1530,7 +1534,7 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
   const previewName = generateName(formData);
   const selectedAgeGroup = ageGroups.find(ag => ag.name === formData.ageGroup);
 
-  return (
+  return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{
@@ -1660,7 +1664,8 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -1819,7 +1824,7 @@ function AddPlayerModal({ tournament, participants, onClose, onSuccess }) {
     );
   };
 
-  return (
+  return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 999 }} />
       <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 16, padding: 24, boxShadow: 'var(--shadow-modal)', maxWidth: 500, width: '90%', maxHeight: '90vh', overflowY: 'auto', zIndex: 1000}}>
@@ -1854,7 +1859,8 @@ function AddPlayerModal({ tournament, participants, onClose, onSuccess }) {
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

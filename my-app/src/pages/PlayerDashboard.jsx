@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
@@ -243,10 +244,10 @@ function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
   const [partnerEmail, setPartnerEmail] = useState('');
 
   const selectedCat = tournament.categories?.find(c => c.id === parseInt(selectedCategoryId));
-  const isDoubles = selectedCat?.type === 'DOUBLE';
+  const isDoubles = selectedCat?.categoryType === 'DOUBLE';
   const isFull = selectedCat?.maxParticipants && (selectedCat?.currentParticipants || 0) >= selectedCat.maxParticipants;
 
-  return (
+  return createPortal(
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{
@@ -343,7 +344,8 @@ function RegisterModal({ tournament, user, onConfirm, onClose, isLoading }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
@@ -216,7 +217,7 @@ function CreateTournamentModal({ onClose, onSuccess }) {
     </div>
   );
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -401,7 +402,8 @@ function CreateTournamentModal({ onClose, onSuccess }) {
           </div>
         </form>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

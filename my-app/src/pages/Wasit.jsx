@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import matchesApi from '../api/matches';
 import tournamentsApi from '../api/tournaments';
 import { useAuth } from '../context/AuthContext';
@@ -408,7 +409,7 @@ function ScoreModal({ match, onClose, onSuccess }) {
   const homeName = match.homeTeam?.name || match.homeTeam?.user?.name || match.homeTeam?.offlineName || 'Home';
   const awayName = match.awayTeam?.name || match.awayTeam?.user?.name || match.awayTeam?.offlineName || 'Away';
 
-  return (
+  return createPortal(
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)',
@@ -581,7 +582,8 @@ function ScoreModal({ match, onClose, onSuccess }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
