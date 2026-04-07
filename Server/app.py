@@ -20,6 +20,7 @@ from routes.schedule import schedule_blueprint
 from routes.standings import standings_blueprint
 from routes.tournament import tournament_blueprint
 from routes.court import court_blueprint
+from routes.referee_application import referee_app_blueprint
 
 # Create Flask app
 app = Flask(__name__)
@@ -61,6 +62,7 @@ app.register_blueprint(schedule_blueprint)
 app.register_blueprint(standings_blueprint)
 app.register_blueprint(tournament_blueprint)
 app.register_blueprint(court_blueprint)
+app.register_blueprint(referee_app_blueprint)
 
 # Basic route to test server
 @app.route('/')

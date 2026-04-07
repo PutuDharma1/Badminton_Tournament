@@ -2,7 +2,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import db
-from models import Match, Team, MatchSet, User
+from models import Match, Team, MatchSet, User, RefereeApplication
 from sqlalchemy.orm import joinedload
 from datetime import datetime
 from routes.schedule import advance_knockout
@@ -266,6 +266,7 @@ def retire_match(match_id):
 
 @match_blueprint.route('/<int:match_id>/referee', methods=['PUT'])
 def assign_referee(match_id):
+    """Committee assigns a referee to a match. Referee must be ACCEPTED for the tournament."""
     data = request.get_json()
     referee_id = data.get('refereeId')
 
@@ -277,6 +278,20 @@ def assign_referee(match_id):
         referee = User.query.get(referee_id)
         if not referee:
             return jsonify({"error": "Referee not found"}), 404
+
+        if referee.role != 'REFEREE':
+            return jsonify({"error": "Target user is not a referee."}), 400
+
+        # Guard: referee must be ACCEPTED for this tournament
+        acceptance = RefereeApplication.query.filter_by(
+            referee_id=referee_id,
+            tournament_id=match.tournament_id,
+            status='ACCEPTED'
+        ).first()
+        if not acceptance:
+            return jsonify({
+                "error": "This referee has not been accepted for this tournament and cannot be assigned to matches."
+            }), 403
 
         match.referee_id = referee_id
         db.session.commit()
@@ -290,7 +305,7 @@ def assign_referee(match_id):
 @match_blueprint.route('/<int:match_id>/self-assign', methods=['PUT'])
 @jwt_required()
 def self_assign_match(match_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     try:
         user = User.query.get(current_user_id)
@@ -301,12 +316,23 @@ def self_assign_match(match_id):
         if not match:
             return jsonify({"error": "Match not found"}), 404
 
+        # Guard: referee must be ACCEPTED for this tournament
+        acceptance = RefereeApplication.query.filter_by(
+            referee_id=current_user_id,
+            tournament_id=match.tournament_id,
+            status='ACCEPTED'
+        ).first()
+        if not acceptance:
+            return jsonify({
+                "error": "You are not an accepted referee for this tournament. Apply and get approved first."
+            }), 403
+
         if match.referee_id:
             if match.referee_id == current_user_id:
                 return jsonify({"message": "Already assigned to this match"}), 200
             return jsonify({"error": "Match already has a referee assigned"}), 409
 
-        # Check if the referee has an currently ONGOING match
+        # Check if the referee has a currently ONGOING match
         ongoing_match = Match.query.filter(
             Match.referee_id == current_user_id,
             Match.status == 'ONGOING'
@@ -346,9 +372,18 @@ def self_assign_match(match_id):
 
 @match_blueprint.route('/referees', methods=['GET'])
 def get_referees():
-    """Get all users with REFEREE role."""
+    """Get referees. If ?tournamentId=X is passed, only returns referees ACCEPTED for that tournament."""
     try:
-        referees = User.query.filter_by(role='REFEREE').all()
+        tournament_id = request.args.get('tournamentId', type=int)
+        if tournament_id:
+            accepted = RefereeApplication.query.filter_by(
+                tournament_id=tournament_id,
+                status='ACCEPTED'
+            ).all()
+            referees = [a.referee for a in accepted]
+        else:
+            referees = User.query.filter_by(role='REFEREE').all()
+
         return jsonify([{"id": r.id, "name": r.name, "email": r.email} for r in referees]), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500

@@ -262,3 +262,48 @@ class MatchSet(db.Model):
             "homeScore": self.home_score,
             "awayScore": self.away_score
         }
+
+
+class RefereeApplication(db.Model):
+    __tablename__ = 'RefereeApplication'
+    id = db.Column(db.Integer, primary_key=True)
+    referee_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=False)
+    tournament_id = db.Column(db.Integer, db.ForeignKey('Tournament.id'), nullable=False)
+    status = db.Column(db.String(20), default='PENDING')  # PENDING, ACCEPTED, REJECTED
+    message = db.Column(db.Text, nullable=True)
+    applied_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey('User.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('referee_id', 'tournament_id', name='uq_referee_tournament'),
+    )
+
+    referee = db.relationship('User', foreign_keys=[referee_id], backref='referee_applications')
+    tournament = db.relationship('Tournament', foreign_keys=[tournament_id], backref='referee_applications')
+    reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'refereeId': self.referee_id,
+            'referee': {
+                'id': self.referee.id,
+                'name': self.referee.name,
+                'email': self.referee.email,
+            } if self.referee else None,
+            'tournamentId': self.tournament_id,
+            'tournament': {
+                'id': self.tournament.id,
+                'name': self.tournament.name,
+                'location': self.tournament.location,
+                'status': self.tournament.status,
+            } if self.tournament else None,
+            'status': self.status,
+            'message': self.message,
+            'appliedAt': self.applied_at.isoformat() if self.applied_at else None,
+            'reviewedAt': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'reviewedById': self.reviewed_by_id,
+            'rejectionReason': self.rejection_reason,
+        }

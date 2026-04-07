@@ -3,17 +3,21 @@ Seed script to create 2 dummy tournaments with age-based categories:
 1. "Turnamen Merdeka Cup" — DRAFT, ready to start round-robin (8 players per category × all age groups)
 2. "Turnamen Pahlawan Open" — ONGOING, round-robin FINISHED, ready to generate knockout bracket
 
-Requires: seed.py to have been run first (creates COMMITTEE and REFEREE users).
+Also seeds RefereeApplication records:
+ - T1 (DRAFT): referees have PENDING applications awaiting committee review
+ - T2 (ONGOING): mix of ACCEPTED, PENDING, and REJECTED applications
+
+Requires: seed.py to have been run first (creates COMMITTEE user).
 
 Usage:
     python seed_two_tournaments.py
 """
 
 from app import app
-from extensions import db
+from extensions import db, bcrypt
 from models import (
     Tournament, Category, User, Participant, Team, TeamParticipant,
-    Match, MatchSet, Court
+    Match, MatchSet, Court, RefereeApplication
 )
 from services.age_rules import CATEGORY_RULES, AGE_GROUP_MAP
 from routes.schedule import resolve_slot, pre_generate_knockout_matches
@@ -21,7 +25,7 @@ from datetime import datetime, timedelta
 import random
 import math
 
-# ── Name pools ────────────────────────────────────────────────────────────────
+# -- Name pools ----------------------------------------------------------------
 FIRST_NAMES_M = [
     "Budi", "Andi", "Joko", "Ryu", "Ken", "Dhani", "Reza", "Taufik",
     "Kevin", "Marcus", "Jonatan", "Anthony", "Fajar", "Rian", "Shesar",
@@ -133,7 +137,7 @@ def random_set_score():
     return 21, loser
 
 
-# ── Age groups to use ────────────────────────────────────────────────────────
+# -- Age groups to use --------------------------------------------------------
 # We use: U13, U15, U17, U19, OPEN (skipping U11 for practicality)
 AGE_GROUPS_TO_USE = ["U13", "U15", "U17", "U19", "OPEN"]
 
@@ -144,10 +148,41 @@ CATEGORY_TEMPLATES = [
 ]
 
 
+# -- Referee profiles ---------------------------------------------------------
+REFEREE_PROFILES = [
+    {"name": "Ahmad Fauzi",    "email": "referee1@dummy.com", "gender": "MALE",   "birth_year": 1985},
+    {"name": "Budi Hartono",   "email": "referee2@dummy.com", "gender": "MALE",   "birth_year": 1990},
+    {"name": "Citra Dewi",     "email": "referee3@dummy.com", "gender": "FEMALE", "birth_year": 1992},
+    {"name": "Dian Permata",   "email": "referee4@dummy.com", "gender": "FEMALE", "birth_year": 1988},
+]
+
+
+def get_or_create_referee(profile):
+    """Get existing referee or create a new one."""
+    user = User.query.filter_by(email=profile["email"]).first()
+    if not user:
+        user = User(
+            name=profile["name"],
+            email=profile["email"],
+            password=bcrypt.generate_password_hash("password").decode('utf-8'),
+            role="REFEREE",
+            gender=profile["gender"],
+            birth_date=datetime(profile["birth_year"], 6, 15),
+            phone=f"+628{random.randint(100000000, 999999999)}",
+        )
+        db.session.add(user)
+        db.session.flush()
+    else:
+        user.role = "REFEREE"  # ensure role is correct
+    return user
+
+
 def run():
     with app.app_context():
         # --- Clean up old dummy data ---
         print("Cleaning up old dummy data...")
+        # Delete in FK-safe order: RefereeApplication → MatchSet → Match → TeamParticipant → Team → Court → Participant → Category → Tournament → dummy referees
+        RefereeApplication.query.delete()
         MatchSet.query.delete()
         Match.query.delete()
         TeamParticipant.query.delete()
@@ -156,6 +191,8 @@ def run():
         Participant.query.delete()
         Category.query.delete()
         Tournament.query.delete()
+        # Remove old dummy referees so they can be recreated cleanly
+        User.query.filter(User.email.in_([p["email"] for p in REFEREE_PROFILES])).delete(synchronize_session='fetch')
         db.session.commit()
         print("Old data deleted!\n")
 
@@ -164,11 +201,17 @@ def run():
             print("ERROR: No COMMITTEE user found. Run seed.py first.")
             return
 
-        referee = User.query.filter_by(role='REFEREE').first()
+        # -- Create dummy referees ---------------------------------------------
+        print("Creating dummy referees...")
+        referees = [get_or_create_referee(p) for p in REFEREE_PROFILES]
+        db.session.commit()
+        for r in referees:
+            print(f"  [OK] Referee: {r.name} ({r.email})")
+        print()
 
-        # ═══════════════════════════════════════════════════════════════
+        # ===============================================================
         # Tournament 1: DRAFT — Ready to START Round-Robin
-        # ═══════════════════════════════════════════════════════════════
+        # ===============================================================
         print("=" * 70)
         print(" Creating Tournament 1: Siap di-Start Round-Robin")
         print("=" * 70)
@@ -199,6 +242,20 @@ def run():
             db.session.add(Court(name=f"Court {i}", tournament_id=t1.id))
         db.session.commit()
 
+        # -- Referee Applications for T1 — all PENDING (awaiting review) -------
+        print("  Seeding referee applications for T1 (all PENDING)...")
+        for ref in referees:
+            ra = RefereeApplication(
+                referee_id=ref.id,
+                tournament_id=t1.id,
+                status='PENDING',
+                message=f"Saya {ref.name}, siap bertugas sebagai wasit di turnamen ini.",
+                applied_at=datetime.utcnow() - timedelta(hours=random.randint(1, 48)),
+            )
+            db.session.add(ra)
+        db.session.commit()
+        print(f"  [OK] {len(referees)} referee applications (PENDING) seeded for T1\n")
+
         total_players_t1 = 0
 
         for age_group in AGE_GROUPS_TO_USE:
@@ -225,15 +282,15 @@ def run():
                     make_single_team(gender, t1, cat, age_group)
                 total_players_t1 += 8
 
-                print(f"  ✅ {cat_name}: 8 players")
+                print(f"  [OK] {cat_name}: 8 players")
 
         db.session.commit()
-        print(f"\n  📊 Total: {total_players_t1} players across {len(AGE_GROUPS_TO_USE) * len(CATEGORY_TEMPLATES)} categories")
-        print(f"  🏟️  Tournament ID: {t1.id} — Status: DRAFT — Ready to Start!\n")
+        print(f"\n  [Stats] Total: {total_players_t1} players across {len(AGE_GROUPS_TO_USE) * len(CATEGORY_TEMPLATES)} categories")
+        print(f"  [Stadium]  Tournament ID: {t1.id} — Status: DRAFT — Ready to Start!\n")
 
-        # ═══════════════════════════════════════════════════════════════
+        # ===============================================================
         # Tournament 2: ONGOING — Round-Robin FINISHED, ready for Knockout
-        # ═══════════════════════════════════════════════════════════════
+        # ===============================================================
         print("=" * 70)
         print(" Creating Tournament 2: RR Selesai, Siap Generate Knockout")
         print("=" * 70)
@@ -260,6 +317,39 @@ def run():
             db.session.add(Court(name=f"Court {i}", tournament_id=t2.id))
         db.session.commit()
         courts2 = Court.query.filter_by(tournament_id=t2.id).order_by(Court.id).all()
+
+        # -- Referee Applications for T2 — mixed statuses ----------------------
+        # ref[0] → ACCEPTED (primary referee, used in matches)
+        # ref[1] → ACCEPTED (secondary referee)
+        # ref[2] → PENDING  (applied but not yet reviewed)
+        # ref[3] → REJECTED (committee declined this one)
+        print("  Seeding referee applications for T2 (ACCEPTED/PENDING/REJECTED)...")
+        ref_app_statuses = [
+            (referees[0], 'ACCEPTED', "Berpengalaman 5 tahun sebagai wasit nasional.", None),
+            (referees[1], 'ACCEPTED', "Tersertifikasi BWF Level 2.", None),
+            (referees[2], 'PENDING',  "Baru lulus pelatihan wasit daerah.", None),
+            (referees[3], 'REJECTED', "Konflik jadwal dengan turnamen lain.", "Jadwal tidak memungkinkan untuk hadir penuh."),
+        ]
+        accepted_referees = []
+        for ref, status, msg, reason in ref_app_statuses:
+            reviewed_at = datetime.utcnow() - timedelta(days=3) if status in ('ACCEPTED', 'REJECTED') else None
+            reviewed_by_id = admin.id if status in ('ACCEPTED', 'REJECTED') else None
+            ra = RefereeApplication(
+                referee_id=ref.id,
+                tournament_id=t2.id,
+                status=status,
+                message=msg,
+                applied_at=datetime.utcnow() - timedelta(days=random.randint(4, 7)),
+                reviewed_at=reviewed_at,
+                reviewed_by_id=reviewed_by_id,
+                rejection_reason=reason,
+            )
+            db.session.add(ra)
+            if status == 'ACCEPTED':
+                accepted_referees.append(ref)
+        db.session.commit()
+        print(f"  [OK] {len(ref_app_statuses)} referee applications seeded for T2")
+        print(f"     ({len(accepted_referees)} ACCEPTED, 1 PENDING, 1 REJECTED)\n")
 
         total_players_t2 = 0
         total_matches_t2 = 0
@@ -327,6 +417,9 @@ def run():
                         winner = random.choice([team_a, team_b])
                         match_len = timedelta(minutes=random.randint(25, 38))
 
+                        # Rotate through accepted referees
+                        assigned_referee = accepted_referees[pair_idx % len(accepted_referees)] if accepted_referees else None
+
                         m = Match(
                             round=round_num,
                             group_code=group_code,
@@ -341,7 +434,7 @@ def run():
                             away_team_id=team_b.id,
                             winner_team_id=winner.id,
                             court_id=best_court_id,
-                            referee_id=referee.id if referee else None,
+                            referee_id=assigned_referee.id if assigned_referee else None,
                             home_score=2 if winner.id == team_a.id else 0,
                             away_score=2 if winner.id == team_b.id else 0,
                             finish_reason='NORMAL',
@@ -367,7 +460,7 @@ def run():
                         cat_matches += 1
 
                 total_matches_t2 += cat_matches
-                print(f"  ✅ {cat_name}: 8 players, {cat_matches} matches (all FINISHED)")
+                print(f"  [OK] {cat_name}: 8 players, {cat_matches} matches (all FINISHED)")
 
         db.session.commit()
         
@@ -376,12 +469,12 @@ def run():
         if ko_matches:
             db.session.add_all(ko_matches)
             db.session.commit()
-            print(f"  ✅ Pre-generated {len(ko_matches)} knockout placeholder matches!")
+            print(f"  [OK] Pre-generated {len(ko_matches)} knockout placeholder matches!")
 
-        print(f"\n  📊 Total: {total_players_t2} players, {total_matches_t2} matches")
-        print(f"  🏟️  Tournament ID: {t2.id} — Status: ONGOING — Ready for Knockout!\n")
+        print(f"\n  [Stats] Total: {total_players_t2} players, {total_matches_t2} matches")
+        print(f"  [Stadium]  Tournament ID: {t2.id} — Status: ONGOING — Ready for Knockout!\n")
 
-        # ── Summary ───────────────────────────────────────────────────────────
+        # -- Summary -----------------------------------------------------------
         print("=" * 70)
         print(" DONE! Summary:")
         print(f"   1. '{t1.name}' (ID: {t1.id})")
