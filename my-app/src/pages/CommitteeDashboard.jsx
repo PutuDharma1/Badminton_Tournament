@@ -1,32 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
-import { MapPin, Calendar, Users, ArrowRight, Trophy } from 'lucide-react';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { MapPin, Calendar, Users, Trophy } from 'lucide-react';
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Status config — uses CSS custom properties so dark mode is automatic ─────
 const STATUS_CFG = {
-  DRAFT:    { label: 'Draft',    textLight: '#1d4ed8', textDark: '#93c5fd', bgLight: 'rgba(59,130,246,0.08)',   dotLight: '#3b82f6', dotDark: '#60a5fa' },
-  ONGOING:  { label: 'Ongoing',  textLight: '#c2410c', textDark: '#fdba74', bgLight: 'rgba(194,65,12,0.08)',    dotLight: '#f97316', dotDark: '#f97316' },
-  FINISHED: { label: 'Finished', textLight: '#15803d', textDark: '#86efac', bgLight: 'rgba(21,128,61,0.08)',    dotLight: '#22c55e', dotDark: '#22c55e' },
+  DRAFT: {
+    label: 'Draft',
+    color: 'var(--status-scheduled-text)',
+    bg:    'var(--status-scheduled-bg)',
+    dot:   'var(--status-scheduled-border)',
+  },
+  ONGOING: {
+    label: 'Ongoing',
+    color: 'var(--status-ongoing-text)',
+    bg:    'var(--status-ongoing-bg)',
+    dot:   'var(--status-ongoing-border)',
+  },
+  FINISHED: {
+    label: 'Finished',
+    color: 'var(--status-finished-text)',
+    bg:    'var(--status-finished-bg)',
+    dot:   'var(--status-finished-border)',
+  },
 };
 
-function getStatusStyle(statusKey) {
-  const isDark = document.documentElement.classList.contains('dark');
-  const cfg = STATUS_CFG[statusKey] || STATUS_CFG.DRAFT;
-  return {
-    color:      isDark ? cfg.textDark  : cfg.textLight,
-    background: cfg.bgLight,
-    dot:        isDark ? cfg.dotDark   : cfg.dotLight,
-    label:      cfg.label,
-  };
+// ─── Skeleton card for loading state ─────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div className="card" style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: 14 }} aria-hidden="true">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div className="skeleton" style={{ height: 20, width: '60%' }} />
+        <div className="skeleton" style={{ height: 20, width: 56, borderRadius: 6 }} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        <div className="skeleton" style={{ height: 13, width: '45%', borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 13, width: '35%', borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 13, width: '55%', borderRadius: 4 }} />
+      </div>
+      <div style={{ paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+        <div className="skeleton" style={{ height: 34, flex: 1, borderRadius: 10 }} />
+        <div className="skeleton" style={{ height: 34, width: 64, borderRadius: 10 }} />
+      </div>
+    </div>
+  );
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({ label, value, note, accentClass }) {
+function StatCard({ label, value, note }) {
   return (
-    <div className={`stat-card ${accentClass || ''}`}>
+    <div className="stat-card">
       <div className="stat-header">
         <span className="stat-label">{label}</span>
       </div>
@@ -37,18 +63,18 @@ function StatCard({ label, value, note, accentClass }) {
 }
 
 // ─── Tournament Card ──────────────────────────────────────────────────────────
-function TournamentCard({ tournament, onView, onDelete }) {
-  const s = getStatusStyle(tournament.status);
+function TournamentCard({ tournament, onView, onDeleteClick }) {
+  const cfg = STATUS_CFG[tournament.status] || STATUS_CFG.DRAFT;
   const startDate = tournament.startDate
     ? new Date(tournament.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
 
   return (
-    <div
+    <article
       className="card"
       style={{
         padding: '18px 18px 16px',
-        borderLeft: `3px solid ${s.dot}`,
+        borderLeft: `3px solid ${cfg.dot}`,
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -78,27 +104,27 @@ function TournamentCard({ tournament, onView, onDelete }) {
           display: 'inline-flex', alignItems: 'center', gap: 5,
           fontSize: 10.5, fontWeight: 700,
           padding: '3px 8px', borderRadius: 6,
-          background: s.background, color: s.color,
+          background: cfg.bg, color: cfg.color,
           textTransform: 'uppercase', letterSpacing: '0.06em',
           whiteSpace: 'nowrap', flexShrink: 0,
         }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.dot, display: 'inline-block' }} />
-          {s.label}
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, display: 'inline-block' }} aria-hidden="true" />
+          {cfg.label}
         </span>
       </div>
 
       {/* Meta */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
-          <MapPin size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <MapPin size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} aria-hidden="true" />
           <span>{tournament.location}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
-          <Calendar size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <Calendar size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} aria-hidden="true" />
           <span>{startDate}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--text-muted)' }}>
-          <Users size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
+          <Users size={13} style={{ flexShrink: 0, color: 'var(--text-faint)' }} aria-hidden="true" />
           <span>{tournament.participantCount || 0} participants &middot; {tournament.matchCount || 0} matches</span>
         </div>
       </div>
@@ -111,19 +137,21 @@ function TournamentCard({ tournament, onView, onDelete }) {
         <button
           className="btn-primary"
           onClick={onView}
+          aria-label={`Manage ${tournament.name}`}
           style={{ flex: 1, fontSize: 13, padding: '7px 12px' }}
         >
           Manage →
         </button>
         <button
           className="btn-danger"
-          onClick={onDelete}
+          onClick={onDeleteClick}
+          aria-label={`Delete ${tournament.name}`}
           style={{ fontSize: 13, padding: '7px 14px', flexShrink: 0 }}
         >
           Delete
         </button>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -195,21 +223,16 @@ function CreateTournamentModal({ onClose, onSuccess }) {
     }
   };
 
-  // Shared input grid helper
   const Grid2 = ({ children }) => (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{children}</div>
   );
 
   const SectionDivider = ({ label }) => (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      margin: '20px 0 14px',
-    }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0 14px' }}>
       <div style={{ height: 1, flex: 1, background: 'var(--border)' }} />
       <span style={{
         fontSize: 11, fontWeight: 700, color: 'var(--text-faint)',
-        letterSpacing: '0.1em', textTransform: 'uppercase',
-        whiteSpace: 'nowrap',
+        letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap',
       }}>
         {label}
       </span>
@@ -222,6 +245,7 @@ function CreateTournamentModal({ onClose, onSuccess }) {
       {/* Backdrop */}
       <div
         onClick={onClose}
+        aria-hidden="true"
         style={{
           position: 'fixed', inset: 0,
           background: 'rgba(0,0,0,0.55)',
@@ -230,10 +254,12 @@ function CreateTournamentModal({ onClose, onSuccess }) {
           animation: 'fadeIn 0.15s ease',
         }}
       />
-      <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
 
       {/* Modal */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
         style={{
           position: 'fixed',
           top: '50%', left: '50%',
@@ -250,12 +276,10 @@ function CreateTournamentModal({ onClose, onSuccess }) {
           animation: 'slideUp 0.18s ease',
         }}
       >
-        <style>{`@keyframes slideUp { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)) } to { opacity: 1; transform: translate(-50%, -50%) } }`}</style>
-
         {/* Modal header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <div>
-            <h2 style={{
+            <h2 id="modal-title" style={{
               fontFamily: "'Sora', sans-serif",
               fontSize: 21, fontWeight: 700,
               letterSpacing: '-0.02em',
@@ -270,98 +294,123 @@ function CreateTournamentModal({ onClose, onSuccess }) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close modal"
             style={{
-              width: 32, height: 32, borderRadius: 8,
+              width: 44, height: 44, borderRadius: 8,
               border: '1.5px solid var(--border)',
               background: 'var(--bg-subtle)',
               color: 'var(--text-muted)',
               cursor: 'pointer', display: 'flex',
               alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, flexShrink: 0,
+              flexShrink: 0,
               transition: 'all 0.15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
           >
-            ✕
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
           </button>
         </div>
 
-        {error && <div className="alert-error">{error}</div>}
+        {error && (
+          <div className="alert-error" role="alert">
+            {error}
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
-            <label className="form-label">Tournament Name *</label>
-            <input type="text" name="name" className="form-input"
+            <label className="form-label" htmlFor="t-name">
+              Tournament Name <abbr title="required" style={{ color: 'var(--danger-text)', textDecoration: 'none' }}>*</abbr>
+            </label>
+            <input id="t-name" type="text" name="name" className="form-input"
               placeholder="Spring Championship 2025"
-              value={formData.name} onChange={handleChange} disabled={loading} />
+              value={formData.name} onChange={handleChange}
+              disabled={loading} required />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Venue / Location *</label>
-            <input type="text" name="location" className="form-input"
+            <label className="form-label" htmlFor="t-location">
+              Venue / Location <abbr title="required" style={{ color: 'var(--danger-text)', textDecoration: 'none' }}>*</abbr>
+            </label>
+            <input id="t-location" type="text" name="location" className="form-input"
               placeholder="GOR Senayan, Jakarta"
-              value={formData.location} onChange={handleChange} disabled={loading} />
+              value={formData.location} onChange={handleChange}
+              disabled={loading} required />
           </div>
 
           <Grid2>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Start Date *</label>
-              <input type="date" name="startDate" className="form-input"
-                value={formData.startDate} onChange={handleChange} disabled={loading} />
+              <label className="form-label" htmlFor="t-start">
+                Start Date <abbr title="required" style={{ color: 'var(--danger-text)', textDecoration: 'none' }}>*</abbr>
+              </label>
+              <input id="t-start" type="date" name="startDate" className="form-input"
+                value={formData.startDate} onChange={handleChange}
+                disabled={loading} required />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">End Date *</label>
-              <input type="date" name="endDate" className="form-input"
-                value={formData.endDate} onChange={handleChange} disabled={loading} />
+              <label className="form-label" htmlFor="t-end">
+                End Date <abbr title="required" style={{ color: 'var(--danger-text)', textDecoration: 'none' }}>*</abbr>
+              </label>
+              <input id="t-end" type="date" name="endDate" className="form-input"
+                value={formData.endDate} onChange={handleChange}
+                disabled={loading} required />
             </div>
           </Grid2>
 
           <div className="form-group" style={{ marginTop: 12 }}>
-            <label className="form-label">Registration Deadline <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>(optional)</span></label>
-            <input type="datetime-local" name="registrationDeadline" className="form-input"
+            <label className="form-label" htmlFor="t-deadline">
+              Registration Deadline{' '}
+              <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <input id="t-deadline" type="datetime-local" name="registrationDeadline" className="form-input"
               value={formData.registrationDeadline} onChange={handleChange} disabled={loading} />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Number of Courts</label>
-            <input type="number" name="courts" className="form-input"
+            <label className="form-label" htmlFor="t-courts">Number of Courts</label>
+            <input id="t-courts" type="number" name="courts" className="form-input"
               min="1" max="20" value={formData.courts} onChange={handleChange} disabled={loading} />
-            <span style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 4 }}>
+            <span style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 4, display: 'block' }}>
               Courts are auto-created and required for match scheduling.
             </span>
           </div>
 
           <div className="form-group">
-            <label className="form-label">Description <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>(optional)</span></label>
-            <textarea name="description" className="form-input" rows="3"
+            <label className="form-label" htmlFor="t-desc">
+              Description{' '}
+              <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}>(optional)</span>
+            </label>
+            <textarea id="t-desc" name="description" className="form-input" rows="3"
               placeholder="Tournament rules, prizes, eligibility…"
               value={formData.description} onChange={handleChange}
               disabled={loading} style={{ resize: 'vertical' }} />
           </div>
 
-          {/* Schedule settings */}
           <SectionDivider label="Schedule Settings" />
 
           <Grid2>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Daily Start</label>
-              <input type="time" name="dailyStartTime" className="form-input"
+              <label className="form-label" htmlFor="t-daily-start">Daily Start</label>
+              <input id="t-daily-start" type="time" name="dailyStartTime" className="form-input"
                 value={formData.dailyStartTime} onChange={handleChange} disabled={loading} />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Daily End</label>
-              <input type="time" name="dailyEndTime" className="form-input"
+              <label className="form-label" htmlFor="t-daily-end">Daily End</label>
+              <input id="t-daily-end" type="time" name="dailyEndTime" className="form-input"
                 value={formData.dailyEndTime} onChange={handleChange} disabled={loading} />
             </div>
           </Grid2>
 
           <div className="form-group" style={{ marginTop: 12 }}>
-            <label className="form-label">Match Duration (minutes)</label>
-            <input type="number" name="matchDurationMinutes" className="form-input"
+            <label className="form-label" htmlFor="t-duration">Match Duration (minutes)</label>
+            <input id="t-duration" type="number" name="matchDurationMinutes" className="form-input"
               min="15" max="120" step="5"
               value={formData.matchDurationMinutes} onChange={handleChange} disabled={loading} />
-            <span style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 4 }}>
+            <span style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 4, display: 'block' }}>
               Used by the scheduler to space match slots.
             </span>
           </div>
@@ -370,17 +419,17 @@ function CreateTournamentModal({ onClose, onSuccess }) {
 
           <Grid2>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Break Start</label>
-              <input type="time" name="breakStartTime" className="form-input"
+              <label className="form-label" htmlFor="t-break-start">Break Start</label>
+              <input id="t-break-start" type="time" name="breakStartTime" className="form-input"
                 value={formData.breakStartTime} onChange={handleChange} disabled={loading} />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Break End</label>
-              <input type="time" name="breakEndTime" className="form-input"
+              <label className="form-label" htmlFor="t-break-end">Break End</label>
+              <input id="t-break-end" type="time" name="breakEndTime" className="form-input"
                 value={formData.breakEndTime} onChange={handleChange} disabled={loading} />
             </div>
           </Grid2>
-          <span style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 2, display: 'block' }}>
+          <span style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 4, display: 'block' }}>
             Leave blank if there's no break. The scheduler skips this window.
           </span>
 
@@ -390,7 +439,9 @@ function CreateTournamentModal({ onClose, onSuccess }) {
               type="submit" className="btn-primary" disabled={loading}
               style={{ flex: 1, padding: '10px', fontSize: 14 }}
             >
-              {loading ? 'Creating…' : 'Create Tournament'}
+              {loading
+                ? <><span className="sr-only">Creating tournament…</span><span aria-hidden="true">Creating…</span></>
+                : 'Create Tournament'}
             </button>
             <button
               type="button" className="btn-outline"
@@ -414,6 +465,7 @@ function CommitteeDashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, name }
   const [error, setError] = useState('');
 
   useEffect(() => { fetchTournaments(); }, []);
@@ -433,24 +485,47 @@ function CommitteeDashboard() {
     total:             tournaments.length,
     ongoing:           tournaments.filter(t => t.status === 'ONGOING').length,
     draft:             tournaments.filter(t => t.status === 'DRAFT').length,
-    finished:          tournaments.filter(t => t.status === 'FINISHED').length,
     totalParticipants: tournaments.reduce((s, t) => s + (t.participantCount || 0), 0),
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this tournament? This cannot be undone.')) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
-      await tournamentsApi.deleteTournament(id);
-      setTournaments(prev => prev.filter(t => t.id !== id));
+      await tournamentsApi.deleteTournament(deleteTarget.id);
+      setTournaments(prev => prev.filter(t => t.id !== deleteTarget.id));
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
   if (loading) {
     return (
-      <div className="main-content" style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
-        <div className="spinner" />
+      <div className="main-content-wide" aria-busy="true" aria-label="Loading tournaments">
+        {/* Header skeleton */}
+        <div style={{ marginBottom: 28 }}>
+          <div className="skeleton" style={{ height: 11, width: 130, borderRadius: 4, marginBottom: 12 }} />
+          <div className="skeleton" style={{ height: 32, width: 220, borderRadius: 6, marginBottom: 10 }} />
+          <div className="skeleton" style={{ height: 14, width: '60%', borderRadius: 4 }} />
+        </div>
+        {/* Stat cards skeleton */}
+        <div className="stat-grid" style={{ marginBottom: 28 }}>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="stat-card">
+              <div className="skeleton" style={{ height: 11, width: '55%', borderRadius: 4, marginBottom: 14 }} />
+              <div className="skeleton" style={{ height: 30, width: '40%', borderRadius: 6 }} />
+            </div>
+          ))}
+        </div>
+        {/* Tournament cards skeleton */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: 14,
+        }}>
+          {[0, 1, 2].map(i => <SkeletonCard key={i} />)}
+        </div>
       </div>
     );
   }
@@ -472,13 +547,13 @@ function CommitteeDashboard() {
         </p>
       </div>
 
-      {error && <div className="alert-error">{error}</div>}
+      {error && <div className="alert-error" role="alert">{error}</div>}
 
       {/* Stats */}
       <div className="stat-grid">
-        <StatCard label="Total Tournaments" value={stats.total}    note="all time" />
-        <StatCard label="Ongoing"           value={stats.ongoing}  note="currently active" />
-        <StatCard label="In Draft"          value={stats.draft}    note="not yet started" />
+        <StatCard label="Total Tournaments" value={stats.total}             note="all time" />
+        <StatCard label="Ongoing"           value={stats.ongoing}           note="currently active" />
+        <StatCard label="In Draft"          value={stats.draft}             note="not yet started" />
         <StatCard label="Total Players"     value={stats.totalParticipants} note="across all events" />
       </div>
 
@@ -503,47 +578,37 @@ function CommitteeDashboard() {
 
       {/* Tournament list */}
       {tournaments.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '64px 24px',
-          background: 'var(--bg-card)',
-          borderRadius: 14,
-          border: '1.5px dashed var(--border)',
-        }}>
-          <div style={{ width: 56, height: 56, borderRadius: 14, background: 'var(--bg-subtle)', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
-            <Trophy size={24} />
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <Trophy size={24} aria-hidden="true" />
           </div>
-          <p style={{
-            fontFamily: "'Sora', sans-serif",
-            fontSize: 17, fontWeight: 600,
-            color: 'var(--text-secondary)', marginBottom: 8,
-          }}>
-            No tournaments yet
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--text-faint)', marginBottom: 20 }}>
-            Create your first tournament to get started.
-          </p>
+          <p className="empty-state-title">No tournaments yet</p>
+          <p className="empty-state-desc">Create your first tournament to get started.</p>
           <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
             Create Tournament
           </button>
         </div>
       ) : (
-        <div className="stagger-in" style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: 14,
-        }}>
+        <div
+          className="stagger-in"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gap: 14,
+          }}
+        >
           {tournaments.map(t => (
             <TournamentCard
               key={t.id}
               tournament={t}
               onView={() => navigate(`/tournament/${t.id}`)}
-              onDelete={() => handleDelete(t.id)}
+              onDeleteClick={() => setDeleteTarget({ id: t.id, name: t.name })}
             />
           ))}
         </div>
       )}
 
+      {/* Create modal */}
       {showCreateModal && (
         <CreateTournamentModal
           onClose={() => setShowCreateModal(false)}
@@ -554,6 +619,18 @@ function CommitteeDashboard() {
           }}
         />
       )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmationModal
+        isOpen={!!deleteTarget}
+        title="Delete Tournament?"
+        message={`"${deleteTarget?.name}" will be permanently deleted. This action cannot be undone.`}
+        confirmText="Delete Tournament"
+        cancelText="Cancel"
+        isDangerous
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

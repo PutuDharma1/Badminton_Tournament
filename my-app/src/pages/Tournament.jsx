@@ -10,6 +10,7 @@ import { categoriesApi } from '../api/categories';
 import apiClient from '../api/client';
 import Toast from '../components/Toast';
 import ConfirmationModal from '../components/ConfirmationModal';
+import RefereeManagementTab from '../components/RefereeManagementTab';
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_STYLE = {
@@ -252,6 +253,7 @@ function TournamentManagement() {
     tabs.push('groups', 'matches', 'leaderboard');
   }
   tabs.push('bracket');
+  if (isCommittee) tabs.push('referees');
 
   // Find champion if tournament is finished
   let championTeamName = null;
@@ -368,7 +370,7 @@ function TournamentManagement() {
                 whiteSpace: 'nowrap', textTransform: 'capitalize',
               }}
             >
-              {tab === 'leaderboard' ? 'Leaderboard' : tab === 'bracket' ? 'Bracket' : tab}
+              {tab === 'leaderboard' ? 'Leaderboard' : tab === 'bracket' ? 'Bracket' : tab === 'referees' ? 'Referees' : tab}
               {(tab === 'participants' || tab === 'matches') && (
                 <span style={{
                   padding: '1px 6px', borderRadius: 5, fontSize: 11, fontWeight: 600,
@@ -641,6 +643,14 @@ function TournamentManagement() {
           isCommittee={isCommittee}
           onUpdate={fetchKnockoutMatches}
           showToast={showToast}
+        />
+      )}
+
+      {/* Referees Tab — committee only */}
+      {activeTab === 'referees' && isCommittee && (
+        <RefereeManagementTab
+          tournamentId={Number(id)}
+          isFinished={isFinished}
         />
       )}
 
