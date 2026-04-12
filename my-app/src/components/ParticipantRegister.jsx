@@ -38,11 +38,11 @@ function ParticipantRegister() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Gagal mendaftar');
+        throw new Error(result.error || 'Registration failed');
       }
 
       // Berikan pesan sukses
-      setMessage(`Sukses mendaftar! ${result.fullName} (ID: ${result.id}) masuk ke kategori ID ${result.categoryId}.`);
+      setMessage(`Registration successful! ${result.fullName} (ID: ${result.id}) placed in category ID ${result.categoryId}.`);
       
       // Reset form setelah sukses
       setFullName('');
@@ -62,13 +62,13 @@ function ParticipantRegister() {
     // Menggunakan komponen Card dari daisyUI
     <div className="card bg-base-100 shadow-xl">
       <div className="card-body">
-        <h3 className="card-title">Daftar Peserta Baru</h3>
+        <h3 className="card-title">Register New Participant</h3>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Nama Lengkap</span>
+              <span className="label-text">Full Name</span>
             </label>
             <input
               type="text"
@@ -76,7 +76,7 @@ function ParticipantRegister() {
               onChange={(e) => setFullName(e.target.value)}
               className="input input-bordered w-full"
               required
-              placeholder="Masukkan nama lengkap"
+              placeholder="Enter full name"
             />
           </div>
           
@@ -95,7 +95,7 @@ function ParticipantRegister() {
 
           <div className="form-control">
             <label className="label">
-              <span className="label-text">No. Telepon</span>
+              <span className="label-text">Phone Number</span>
             </label>
             <input
               type="tel"
@@ -108,7 +108,7 @@ function ParticipantRegister() {
 
           <div className="form-control">
             <label className="label">
-              <span className="label-text">Tanggal Lahir</span>
+              <span className="label-text">Date of Birth</span>
             </label>
             <input
               type="date"
@@ -128,8 +128,8 @@ function ParticipantRegister() {
               onChange={(e) => setGender(e.target.value)}
               className="select select-bordered w-full"
             >
-              <option value="MALE">Laki-laki</option>
-              <option value="FEMALE">Perempuan</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
             </select>
           </div>
 
@@ -140,7 +140,7 @@ function ParticipantRegister() {
               disabled={isLoading}
               className="btn btn-primary w-full"
             >
-              {isLoading ? <span className="loading loading-spinner"></span> : 'Daftar & Validasi Usia'}
+              {isLoading ? <span className="loading loading-spinner"></span> : 'Register & Validate Age'}
             </button>
           </div>
         </form>

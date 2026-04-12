@@ -1614,18 +1614,18 @@ function ManageCategoriesModal({ tournament, onClose, onSuccess }) {
               {ageGroups.map(ag => (
                 <option key={ag.name} value={ag.name}>
                   {ag.name} — {ag.label}
-                  {ag.name !== 'OPEN' ? ` (umur ${ag.minAge}–${ag.maxAge - 1} tahun)` : ''}
+                  {ag.name !== 'OPEN' ? ` (ages ${ag.minAge}–${ag.maxAge - 1})` : ''}
                 </option>
               ))}
             </select>
             {selectedAgeGroup && selectedAgeGroup.name !== 'OPEN' && (
               <p style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>
-                ℹ️ Peserta harus berumur {selectedAgeGroup.minAge}–{selectedAgeGroup.maxAge - 1} tahun
+                ℹ️ Participants must be aged {selectedAgeGroup.minAge}–{selectedAgeGroup.maxAge - 1}
               </p>
             )}
             {selectedAgeGroup && selectedAgeGroup.name === 'OPEN' && (
               <p style={{ fontSize: 11, color: '#22c55e', marginTop: 4 }}>
-                ✅ Semua umur bisa mendaftar
+                ✅ All ages can register
               </p>
             )}
           </div>

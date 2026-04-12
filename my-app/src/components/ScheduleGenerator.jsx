@@ -17,7 +17,7 @@ function ScheduleGenerator() {
           setSelectedCategory(data.data[0].id);
         }
       } catch (error) {
-        console.error("Gagal mengambil kategori:", error);
+        console.error("Failed to fetch categories:", error);
       }
     };
     fetchCategories();
@@ -25,7 +25,7 @@ function ScheduleGenerator() {
 
   const handleGenerate = async () => {
     if (!selectedCategory) {
-      setMessage('Error: Silakan pilih kategori');
+      setMessage('Error: Please select a category');
       return;
     }
     
@@ -53,32 +53,32 @@ function ScheduleGenerator() {
   return (
     <div className="card bg-base-100 shadow-xl">
       <div className="card-body">
-        <h3 className="card-title">Generate Jadwal</h3>
+        <h3 className="card-title">Generate Schedule</h3>
         <div className="form-control">
           <label className="label">
-            <span className="label-text">Pilih Kategori</span>
+            <span className="label-text">Select Category</span>
           </label>
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             className="select select-bordered w-full"
           >
-            <option value="">Pilih Kategori...</option>
+            <option value="">Select a category...</option>
             {categories.map(cat => (
               <option key={cat.id} value={cat.id}>
-                {cat.name} ({cat.team_count || cat.participant_count} peserta)
+                {cat.name} ({cat.team_count || cat.participant_count} participants)
               </option>
             ))}
           </select>
         </div>
-        
+
         <div className="card-actions justify-end mt-4">
           <button
             onClick={handleGenerate}
             disabled={isLoading || !selectedCategory}
             className="btn btn-success w-full"
           >
-            {isLoading ? <span className="loading loading-spinner"></span> : 'Generate Jadwal'}
+            {isLoading ? <span className="loading loading-spinner"></span> : 'Generate Schedule'}
           </button>
         </div>
 

@@ -32,15 +32,15 @@ function TournamentSetup({ onCreate }) {
     <div className="main-content">
       <h1 className="page-title">Create Tournament</h1>
       <p className="page-subtitle">
-        Mulai dengan membuat turnamen terlebih dahulu sebelum mendaftarkan
-        pemain dan membuat jadwal.
+        Start by creating a tournament before registering players and building
+        a schedule.
       </p>
 
       <div className="form-card">
         <h2 className="form-title">New Tournament</h2>
         <p className="form-subtitle">
-          Isi detail turnamen, kamu bisa mengubahnya nanti sebelum turnamen
-          dimulai.
+          Fill in the tournament details. You can edit them later before the
+          tournament begins.
         </p>
 
         {error && (
@@ -122,7 +122,7 @@ function CommitteeDashboard({ tournament, players, matches, onStart }) {
           Status:{" "}
           <strong>
             {tournament.status === "DRAFT"
-              ? "Draft (belum dimulai)"
+              ? "Draft (not started)"
               : tournament.status === "ONGOING"
               ? "Ongoing"
               : "Finished"}

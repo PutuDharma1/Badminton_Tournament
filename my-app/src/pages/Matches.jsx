@@ -10,6 +10,7 @@ function Matches() {
   const [activeTournamentId, setActiveTournamentId] = useState(null);
   const [tournaments, setTournaments] = useState([]);
 
+  const [selectedDay, setSelectedDay] = useState(1);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef(null);
@@ -78,6 +79,27 @@ function Matches() {
   const liveOrScheduled = matches.filter(
     (m) => m.status === "ONGOING" || m.status === "SCHEDULED" || m.status === "FINISHED"
   );
+
+  // Group matches by date
+  const matchesByDay = {};
+  liveOrScheduled.forEach(m => {
+    if (!m.scheduledAt) {
+      const key = 'unscheduled';
+      if (!matchesByDay[key]) matchesByDay[key] = [];
+      matchesByDay[key].push(m);
+      return;
+    }
+    const d = new Date(m.scheduledAt);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!matchesByDay[key]) matchesByDay[key] = [];
+    matchesByDay[key].push(m);
+  });
+  const dayKeys = Object.keys(matchesByDay).filter(k => k !== 'unscheduled').sort();
+  const totalDays = dayKeys.length;
+  const clampedDay = Math.min(selectedDay, Math.max(1, totalDays));
+  const currentDayKey = dayKeys[clampedDay - 1];
+  const currentDayMatches = (currentDayKey ? matchesByDay[currentDayKey] : [])
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
 
   const filteredTournaments = tournaments.filter(t =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -260,14 +282,57 @@ function Matches() {
               </p>
             </div>
           ) : (
-            <div className="stagger-in" style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: 14,
-            }}>
-              {liveOrScheduled.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
+            <div>
+              {/* Day selector */}
+              {totalDays > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {dayKeys.map((dk, idx) => {
+                      const dayNum = idx + 1;
+                      const dateLabel = new Date(dk).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                      const isActive = clampedDay === dayNum;
+                      return (
+                        <button
+                          key={dk}
+                          onClick={() => setSelectedDay(dayNum)}
+                          style={{
+                            padding: '7px 18px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                            cursor: 'pointer',
+                            border: isActive ? '1px solid var(--round-btn-border-active)' : '1px solid var(--border)',
+                            background: isActive ? 'var(--round-btn-bg-active)' : 'var(--bg-card)',
+                            color: isActive ? 'var(--round-btn-text-active)' : 'var(--text-muted)',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          Day {dayNum} — {dateLabel}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Day header */}
+              {totalDays > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: 'var(--text-secondary)' }}>
+                    Day {clampedDay} — {currentDayKey ? new Date(currentDayKey).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : ''}
+                  </h3>
+                  <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>
+                    {currentDayMatches.length} match{currentDayMatches.length !== 1 ? 'es' : ''}
+                  </span>
+                </div>
+              )}
+
+              <div className="stagger-in" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: 14,
+              }}>
+                {(totalDays > 0 ? currentDayMatches : liveOrScheduled).map((m) => (
+                  <MatchCard key={m.id} match={m} />
+                ))}
+              </div>
             </div>
           )}
         </div>

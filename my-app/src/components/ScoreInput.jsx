@@ -26,7 +26,7 @@ function ScoreInput({ match }) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
       
-      setMessage('Skor berhasil disimpan!');
+      setMessage('Score saved successfully!');
       // refreshData(); // Panggil fungsi ini untuk update data global
       
     } catch (error) {
@@ -39,7 +39,7 @@ function ScoreInput({ match }) {
   return (
     <div className="card bg-base-100 shadow-xl">
       <div className="card-body">
-        <h3 className="card-title text-center block mb-4">Input Skor Pertandingan</h3>
+        <h3 className="card-title text-center block mb-4">Enter Match Score</h3>
         
         <div className="grid grid-cols-3 items-center gap-4">
           {/* Tim Tuan Rumah */}
@@ -73,7 +73,7 @@ function ScoreInput({ match }) {
             disabled={isLoading}
             className="btn btn-primary w-full"
           >
-            {isLoading ? <span className="loading loading-spinner"></span> : 'Simpan Skor & Akhiri'}
+            {isLoading ? <span className="loading loading-spinner"></span> : 'Save Score & Finish'}
           </button>
         </div>
 

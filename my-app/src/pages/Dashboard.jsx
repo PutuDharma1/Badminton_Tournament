@@ -39,7 +39,7 @@ const MatchCard = ({ match }) => {
       <div className="match-footer">
         <span className="match-court" style={{ fontWeight: 'bold', fontSize: 14, color: 'var(--text-primary)' }}>Court {court}</span>
         <span style={{ fontSize: 11 }}>
-          Referee: {referee || "Belum ditugaskan"}
+          Referee: {referee || "Not assigned"}
         </span>
       </div>
     </div>
@@ -110,7 +110,7 @@ const Dashboard = ({ tournament, players = [], matches = [] }) => {
       </h2>
       {matchesToShow.length === 0 ? (
         <p style={{ fontSize: 14, color: "#9ca3af" }}>
-          Belum ada pertandingan live atau terjadwal.
+          No live or scheduled matches yet.
         </p>
       ) : (
         <div className="match-grid">

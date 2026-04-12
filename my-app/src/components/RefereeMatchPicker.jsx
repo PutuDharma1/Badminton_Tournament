@@ -8,17 +8,17 @@ function RefereeMatchPicker({ matches, onSelectMatch, selectedMatchId }) {
   return (
     <div className="card bg-base-100 shadow-xl">
       <div className="card-body">
-        <h3 className="card-title">Pilih Pertandingan</h3>
+        <h3 className="card-title">Select Match</h3>
         <div className="form-control">
           <label className="label">
-            <span className="label-text">Pilih pertandingan yang akan diwasiti</span>
+            <span className="label-text">Select the match to referee</span>
           </label>
           <select
             className="select select-bordered w-full"
             value={selectedMatchId || ''}
             onChange={(e) => onSelectMatch(parseInt(e.target.value) || null)}
           >
-            <option value="">Pilih pertandingan...</option>
+            <option value="">Select a match...</option>
             {availableMatches.map((match) => (
               <option key={match.id} value={match.id}>
                 {match.category.name} - {match.homeTeam.name} vs {match.awayTeam.name}
