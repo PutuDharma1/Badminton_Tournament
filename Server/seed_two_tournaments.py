@@ -99,6 +99,20 @@ def make_single_team(gender, tournament, category, age_group_name):
     return team
 
 
+def make_double_team(gender, tournament, category, age_group_name):
+    """Create a Team with 2 participants (doubles)."""
+    p1 = make_player(gender, tournament.id, category.id, age_group_name)
+    p2 = make_player(gender, tournament.id, category.id, age_group_name)
+    first1 = p1.full_name.split()[0]
+    first2 = p2.full_name.split()[0]
+    team = Team(name=f"{first1}/{first2}", tournament_id=tournament.id, category_id=category.id)
+    db.session.add(team)
+    db.session.flush()
+    db.session.add(TeamParticipant(team_id=team.id, participant_id=p1.id))
+    db.session.add(TeamParticipant(team_id=team.id, participant_id=p2.id))
+    return team
+
+
 def generate_rr_pairs(teams):
     """Generate round-robin pairings for a list of teams."""
     pairs = []
@@ -213,7 +227,7 @@ def run():
         # Tournament 1: DRAFT — Ready to START Round-Robin
         # ===============================================================
         print("=" * 70)
-        print(" Creating Tournament 1: Siap di-Start Round-Robin")
+        print(" Creating Tournament 1: Ready to Start Round-Robin")
         print("=" * 70)
 
         # Use future dates so auto-finish doesn't trigger
@@ -224,7 +238,7 @@ def run():
             location="GOR Senayan, Jakarta",
             start_date=today + timedelta(days=1),
             end_date=today + timedelta(days=10),
-            description="Tournament DRAFT — siap untuk klik Start Tournament dan generate round-robin.",
+            description="Tournament DRAFT — ready to click Start Tournament and generate round-robin.",
             status="DRAFT",
             current_stage=None,
             match_duration_minutes=40,
@@ -249,7 +263,7 @@ def run():
                 referee_id=ref.id,
                 tournament_id=t1.id,
                 status='PENDING',
-                message=f"Saya {ref.name}, siap bertugas sebagai wasit di turnamen ini.",
+                message=f"I am {ref.name}, ready to serve as referee in this tournament.",
                 applied_at=datetime.utcnow() - timedelta(hours=random.randint(1, 48)),
             )
             db.session.add(ra)
@@ -292,7 +306,7 @@ def run():
         # Tournament 2: ONGOING — Round-Robin FINISHED, ready for Knockout
         # ===============================================================
         print("=" * 70)
-        print(" Creating Tournament 2: RR Selesai, Siap Generate Knockout")
+        print(" Creating Tournament 2: RR Finished, Ready to Generate Knockout")
         print("=" * 70)
 
         t2 = Tournament(
@@ -300,7 +314,7 @@ def run():
             location="GOR Jatidiri, Semarang",
             start_date=today - timedelta(days=5),
             end_date=today + timedelta(days=10),
-            description="Round-robin sudah selesai semua. Tinggal klik Generate Knockout Bracket.",
+            description="Round-robin fully completed. Click Generate Knockout Bracket to proceed.",
             status="ONGOING",
             current_stage="GROUP",
             match_duration_minutes=40,
@@ -474,15 +488,207 @@ def run():
         print(f"\n  [Stats] Total: {total_players_t2} players, {total_matches_t2} matches")
         print(f"  [Stadium]  Tournament ID: {t2.id} — Status: ONGOING — Ready for Knockout!\n")
 
+        # ===============================================================
+        # Helper: build one Open-category tournament (RR done, ready for KO)
+        # ===============================================================
+        def build_open_knockout_ready_tournament(name, location, description, start_offset_days):
+            """
+            Create a tournament with OPEN Men's Singles (32 players) +
+            OPEN Men's Doubles (32 teams / 64 players). All round-robin
+            matches are FINISHED and placeholder knockout matches are seeded.
+            Returns (tournament, total_players, total_matches).
+            """
+            open_min, open_max = AGE_GROUP_MAP["OPEN"]
+            t = Tournament(
+                name=name,
+                location=location,
+                start_date=today - timedelta(days=start_offset_days),
+                end_date=today + timedelta(days=14),
+                description=description,
+                status="ONGOING",
+                current_stage="GROUP",
+                match_duration_minutes=40,
+                daily_start_time="08:00",
+                daily_end_time="20:00",
+                break_start_time="12:00",
+                break_end_time="13:00",
+                created_by_id=admin.id,
+            )
+            db.session.add(t)
+            db.session.commit()
+
+            # 6 courts for the larger tournament
+            for i in range(1, 7):
+                db.session.add(Court(name=f"Court {i}", tournament_id=t.id))
+            db.session.commit()
+            courts = Court.query.filter_by(tournament_id=t.id).order_by(Court.id).all()
+
+            # Referee applications
+            for idx, ref in enumerate(referees):
+                status = 'ACCEPTED' if idx < 2 else 'PENDING'
+                ra = RefereeApplication(
+                    referee_id=ref.id,
+                    tournament_id=t.id,
+                    status=status,
+                    message=f"Permohonan dari {ref.name} untuk turnamen ini.",
+                    applied_at=datetime.utcnow() - timedelta(days=random.randint(5, 10)),
+                    reviewed_at=datetime.utcnow() - timedelta(days=3) if status == 'ACCEPTED' else None,
+                    reviewed_by_id=admin.id if status == 'ACCEPTED' else None,
+                )
+                db.session.add(ra)
+            db.session.commit()
+            accepted_refs = referees[:2]
+
+            rr_base = (today - timedelta(days=start_offset_days)).replace(hour=8, minute=0, second=0)
+            court_avail = {c.id: rr_base for c in courts}
+            groups_by_cat = {}
+            total_players = 0
+            total_matches = 0
+
+            for cat_type, make_fn, count, label in [
+                ("SINGLE", make_single_team, 32, "Men's Singles"),
+                ("DOUBLE", make_double_team, 32, "Men's Doubles"),
+            ]:
+                cat = Category(
+                    name=f"Open {label}",
+                    gender="MALE",
+                    level="OPEN",
+                    category_type=cat_type,
+                    min_age=open_min,
+                    max_age=open_max,
+                    tournament_id=t.id,
+                )
+                db.session.add(cat)
+                db.session.commit()
+
+                teams = []
+                for _ in range(count):
+                    teams.append(make_fn("MALE", t, cat, "OPEN"))
+                db.session.commit()
+
+                player_count = count if cat_type == "SINGLE" else count * 2
+                total_players += player_count
+
+                random.shuffle(teams)
+                groups = assign_groups(teams, target_size=4)  # 8 groups of 4
+                groups_by_cat[cat.id] = groups
+                for code, grp_teams in groups.items():
+                    for team in grp_teams:
+                        team.group_code = code
+                db.session.commit()
+
+                cat_matches = 0
+                for group_code, grp_teams in groups.items():
+                    pairs = generate_rr_pairs(grp_teams)
+                    for pair_idx, (team_a, team_b) in enumerate(pairs):
+                        round_num = (pair_idx // 2) + 1
+                        best_court_id = min(court_avail, key=court_avail.get)
+                        raw_time = court_avail[best_court_id]
+                        scheduled = resolve_slot(raw_time, "08:00", "20:00", "12:00", "13:00")
+                        winner = random.choice([team_a, team_b])
+                        match_len = timedelta(minutes=random.randint(25, 48))
+                        assigned_ref = accepted_refs[pair_idx % len(accepted_refs)]
+                        m = Match(
+                            round=round_num,
+                            group_code=group_code,
+                            stage='GROUP',
+                            scheduled_at=scheduled,
+                            started_at=scheduled,
+                            finished_at=scheduled + match_len,
+                            status='FINISHED',
+                            tournament_id=t.id,
+                            category_id=cat.id,
+                            home_team_id=team_a.id,
+                            away_team_id=team_b.id,
+                            winner_team_id=winner.id,
+                            court_id=best_court_id,
+                            referee_id=assigned_ref.id,
+                            home_score=2 if winner.id == team_a.id else 0,
+                            away_score=2 if winner.id == team_b.id else 0,
+                            finish_reason='NORMAL',
+                        )
+                        db.session.add(m)
+                        db.session.flush()
+                        court_avail[best_court_id] = scheduled + MATCH_DURATION
+                        for set_num in range(1, 3):
+                            w_score, l_score = random_set_score()
+                            h, a = (w_score, l_score) if winner.id == team_a.id else (l_score, w_score)
+                            db.session.add(MatchSet(
+                                match_id=m.id, set_number=set_num,
+                                home_score=h, away_score=a,
+                            ))
+                        cat_matches += 1
+
+                total_matches += cat_matches
+                print(f"  [OK] Open {label}: {count} {'players' if cat_type == 'SINGLE' else 'teams'} "
+                      f"({player_count} participants), {cat_matches} matches (all FINISHED)")
+
+            db.session.commit()
+
+            # Placeholder knockout bracket
+            ko_matches = pre_generate_knockout_matches(t.id, court_avail, groups_by_cat)
+            if ko_matches:
+                db.session.add_all(ko_matches)
+                db.session.commit()
+                print(f"  [OK] Pre-generated {len(ko_matches)} knockout placeholder matches!")
+
+            return t, total_players, total_matches
+
+        # ===============================================================
+        # Tournament 3: GOR Bung Karno Open Championship
+        # ===============================================================
+        print("=" * 70)
+        print(" Creating Tournament 3: Open Category — 32 Singles + 32 Doubles")
+        print("=" * 70)
+
+        t3, total_players_t3, total_matches_t3 = build_open_knockout_ready_tournament(
+            name="GOR Bung Karno Open Championship 2026",
+            location="GOR Bung Karno, Jakarta",
+            description=(
+                "Turnamen Open bergengsi di Jakarta. "
+                "Round-robin selesai. Siap generate bracket knockout."
+            ),
+            start_offset_days=7,
+        )
+        print(f"\n  [Stats] Total: {total_players_t3} participants, {total_matches_t3} matches")
+        print(f"  [Stadium]  Tournament ID: {t3.id} — Status: ONGOING — Ready for Knockout!\n")
+
+        # ===============================================================
+        # Tournament 4: Grand Prix Nusantara Open
+        # ===============================================================
+        print("=" * 70)
+        print(" Creating Tournament 4: Open Category — 32 Singles + 32 Doubles")
+        print("=" * 70)
+
+        t4, total_players_t4, total_matches_t4 = build_open_knockout_ready_tournament(
+            name="Grand Prix Nusantara Open 2026",
+            location="GOR Ken Arok, Malang",
+            description=(
+                "Grand Prix tahunan di Malang. "
+                "Babak penyisihan grup telah selesai. Siap lanjut ke fase knockout."
+            ),
+            start_offset_days=10,
+        )
+        print(f"\n  [Stats] Total: {total_players_t4} participants, {total_matches_t4} matches")
+        print(f"  [Stadium]  Tournament ID: {t4.id} — Status: ONGOING — Ready for Knockout!\n")
+
         # -- Summary -----------------------------------------------------------
         print("=" * 70)
         print(" DONE! Summary:")
         print(f"   1. '{t1.name}' (ID: {t1.id})")
         print(f"      → Status: DRAFT, {total_players_t1} players")
-        print(f"      → Klik 'Start Tournament' untuk mulai round-robin")
+        print(f"      → Click 'Start Tournament' to begin round-robin")
         print(f"   2. '{t2.name}' (ID: {t2.id})")
         print(f"      → Status: ONGOING, {total_players_t2} players, {total_matches_t2} matches")
-        print(f"      → Klik 'Generate Knockout' untuk mulai babak eliminasi")
+        print(f"      → Click 'Generate Knockout' to start the elimination round")
+        print(f"   3. '{t3.name}' (ID: {t3.id})")
+        print(f"      → Status: ONGOING, {total_players_t3} participants, {total_matches_t3} matches")
+        print(f"      → Open: 32 Men's Singles + 32 Men's Doubles teams (8 groups each)")
+        print(f"      → Click 'Generate Knockout' to start the elimination round")
+        print(f"   4. '{t4.name}' (ID: {t4.id})")
+        print(f"      → Status: ONGOING, {total_players_t4} participants, {total_matches_t4} matches")
+        print(f"      → Open: 32 Men's Singles + 32 Men's Doubles teams (8 groups each)")
+        print(f"      → Click 'Generate Knockout' to start the elimination round")
         print("=" * 70)
 
 

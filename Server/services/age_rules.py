@@ -18,7 +18,7 @@ AGE_GROUP_MAP = {name: (min_a, max_a) for name, min_a, max_a in CATEGORY_RULES}
 # Labels for API consumers
 AGE_GROUPS = [
     {"name": name, "minAge": min_a, "maxAge": max_a,
-     "label": f"Under {max_a}" if name != "OPEN" else "Open (Semua Umur)"}
+     "label": f"Under {max_a}" if name != "OPEN" else "Open (All Ages)"}
     for name, min_a, max_a in CATEGORY_RULES
 ]
 
