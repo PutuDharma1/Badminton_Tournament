@@ -43,7 +43,7 @@ function Matches() {
         setActiveTournamentId(data[0].id);
       }
     } catch (err) {
-      console.error("Failed to fetch tournaments", err);
+      setError(`Failed to load tournaments: ${err.message}`);
     }
   };
 

@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import matchesApi from '../api/matches';
+import { validateSetScore, setIsWon, getMaxScore, getScoringHint } from '../utils/scoringRules';
 import tournamentsApi from '../api/tournaments';
 import refereeApplicationsApi from '../api/refereeApplications';
 import { useAuth } from '../context/AuthContext';
 import { Trophy, Clock, CheckCircle, XCircle, Send } from 'lucide-react';
+import Toast from '../components/Toast';
 
 function Wasit() {
   const { user } = useAuth();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [picking, setPicking] = useState(null);
 
   // Tournament selection state
@@ -33,6 +34,8 @@ function Wasit() {
   const [applySubmitting, setApplySubmitting] = useState(false);
   const [applyError, setApplyError] = useState('');
   const [appsSuccessMsg, setAppsSuccessMsg] = useState('');
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'success') => setToast({ message, type });
 
   useEffect(() => { fetchMatches(); }, []);
 
@@ -49,7 +52,7 @@ function Wasit() {
         setAllTournaments((allT || []).filter(t => t.status !== 'FINISHED'));
         setMyApplications(apps || []);
       } catch (err) {
-        console.error('Failed to load application data:', err.message);
+        showToast(`Failed to load application data: ${err.message}`, 'error');
       } finally {
         setAppsLoading(false);
       }
@@ -79,7 +82,6 @@ function Wasit() {
   const fetchMatches = async () => {
     try {
       setLoading(true);
-      setError('');
 
       // 1. Fetch all tournaments to find the ONGOING ones
       const tournaments = await tournamentsApi.getTournaments();
@@ -113,8 +115,7 @@ function Wasit() {
 
       setMatches(relevantMatches);
     } catch (err) {
-      setError('Failed to load matches');
-      console.error(err);
+      showToast(`Failed to load matches: ${err.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -126,7 +127,7 @@ function Wasit() {
       await matchesApi.selfAssignReferee(matchId);
       await fetchMatches(); // Refresh list
     } catch (err) {
-      alert(err.message || 'Error occurred while picking the match.');
+      showToast(err.message || 'Error occurred while picking the match.', 'error');
     } finally {
       setPicking(null);
     }
@@ -235,8 +236,6 @@ function Wasit() {
           id="panel-matches"
           aria-labelledby="tab-matches"
         >
-          {error && <div className="alert-error" role="alert">{error}</div>}
-
           {/* My Active Matches */}
           <div className="card" style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -586,13 +585,16 @@ function Wasit() {
         <ScoreModal
           match={selectedMatch}
           onClose={() => { setShowScoreModal(false); setSelectedMatch(null); }}
-          onSuccess={async () => {
+          onSuccess={async (warning) => {
             setShowScoreModal(false);
             setSelectedMatch(null);
             await fetchMatches();
+            if (warning) showToast(warning, 'info');
           }}
         />
       )}
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
@@ -727,22 +729,17 @@ function ScoreModal({ match, onClose, onSuccess }) {
     }
   };
 
+  const pointSystem = match.pointSystem || 'RALLY_21';
+  const isWomensSingles = match.category?.gender === 'FEMALE' && match.category?.categoryType === 'SINGLE';
+  const maxScoreInput = getMaxScore(pointSystem, isWomensSingles);
+
   const getGamesWon = () => {
     let hw = 0, aw = 0;
     sets.forEach(s => {
       const h = parseInt(s.homeScore) || 0;
       const a = parseInt(s.awayScore) || 0;
-      const mx = Math.max(h, a);
-      const mn = Math.min(h, a);
-      // Valid won set
-      if (mx >= 21) {
-        if (mx === 30 && mn <= 29) {
-          if (h > a) hw++; else aw++;
-        } else if (mx > 21 && mx - mn === 2) {
-          if (h > a) hw++; else aw++;
-        } else if (mx === 21 && mn <= 19) {
-          if (h > a) hw++; else aw++;
-        }
+      if (setIsWon(h, a, pointSystem, isWomensSingles)) {
+        if (h > a) hw++; else aw++;
       }
     });
     return { hw, aw };
@@ -753,29 +750,11 @@ function ScoreModal({ match, onClose, onSuccess }) {
     setSaving(true);
     setError('');
 
-    // Strict validation
     for (const s of sets) {
       const h = parseInt(s.homeScore) || 0;
       const a = parseInt(s.awayScore) || 0;
-      const mx = Math.max(h, a);
-      const mn = Math.min(h, a);
-
-      if (mx > 30) {
-        setError(`Score ${h}-${a} is invalid: max points is 30.`);
-        setSaving(false); return;
-      }
-      if (mx >= 21) {
-        if (mx === 30 && mn < 28) {
-          setError(`Score ${h}-${a} is invalid: set should have ended earlier.`);
-          setSaving(false); return;
-        } else if (mx > 21 && mx < 30 && mx - mn !== 2) {
-          setError(`Score ${h}-${a} is invalid: must win by exactly 2 points past 20.`);
-          setSaving(false); return;
-        } else if (mx === 21 && mn >= 20) {
-          setError(`Score ${h}-${a} is invalid: must win by 2 points (deuce).`);
-          setSaving(false); return;
-        }
-      }
+      const err = validateSetScore(h, a, pointSystem, isWomensSingles);
+      if (err) { setError(err); setSaving(false); return; }
     }
 
     try {
@@ -785,8 +764,8 @@ function ScoreModal({ match, onClose, onSuccess }) {
       }
 
       // Submit the scores
-      await matchesApi.updateScore(match.id, sets);
-      onSuccess();
+      const result = await matchesApi.updateScore(match.id, sets);
+      onSuccess(result.warning);
     } catch (err) {
       setError(err.message || 'Failed to submit score. Please check your connection.');
       setSaving(false);
@@ -798,8 +777,8 @@ function ScoreModal({ match, onClose, onSuccess }) {
     setSaving(true);
     setError('');
     try {
-      await matchesApi.retireMatch(match.id, retireTeamId, retireReason);
-      onSuccess();
+      const result = await matchesApi.retireMatch(match.id, retireTeamId, retireReason);
+      onSuccess(result.warning);
     } catch (err) {
       setError(err.message || 'Failed to process retire/walkover.');
       setSaving(false);
@@ -826,11 +805,14 @@ function ScoreModal({ match, onClose, onSuccess }) {
 
         {error && <div className="alert-error" style={{ padding: 8, fontSize: 13, marginBottom: 16 }}>{error}</div>}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, padding: '12px 16px', background: 'var(--bg-subtle)', borderRadius: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, padding: '12px 16px', background: 'var(--bg-subtle)', borderRadius: 8 }}>
           <div style={{ fontWeight: 600, textAlign: 'center', flex: 1 }}>{homeName} (Home)</div>
           <div style={{ fontWeight: 600, color: 'var(--text-faint)', padding: '0 16px' }}>VS</div>
           <div style={{ fontWeight: 600, textAlign: 'center', flex: 1 }}>{awayName} (Away)</div>
         </div>
+        <p style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', marginBottom: 16 }}>
+          {getScoringHint(pointSystem, isWomensSingles)}
+        </p>
 
         <form onSubmit={handleSubmit}>
           {sets.map((setObj, idx) => (
@@ -838,13 +820,13 @@ function ScoreModal({ match, onClose, onSuccess }) {
               <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>Set {idx + 1}</p>
               <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                 <input
-                  type="number" min="0" className="form-input" style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center', fontSize: 20, fontWeight: 700, padding: '12px', boxSizing: 'border-box' }}
+                  type="number" min="0" max={maxScoreInput} className="form-input" style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center', fontSize: 20, fontWeight: 700, padding: '12px', boxSizing: 'border-box' }}
                   value={setObj.homeScore} onChange={e => handleScoreChange(idx, 'homeScore', e.target.value)}
                   required disabled={saving}
                 />
                 <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>-</span>
                 <input
-                  type="number" min="0" className="form-input" style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center', fontSize: 20, fontWeight: 700, padding: '12px', boxSizing: 'border-box' }}
+                  type="number" min="0" max={maxScoreInput} className="form-input" style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center', fontSize: 20, fontWeight: 700, padding: '12px', boxSizing: 'border-box' }}
                   value={setObj.awayScore} onChange={e => handleScoreChange(idx, 'awayScore', e.target.value)}
                   required disabled={saving}
                 />
@@ -935,7 +917,7 @@ function ScoreModal({ match, onClose, onSuccess }) {
                   }}
                 >
                   🤕 Retire<br/>
-                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.8 }}>Cedera / Tidak bisa lanjut</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.8 }}>Injury / Unable to continue</span>
                 </button>
                 <button
                   type="button"
@@ -949,12 +931,12 @@ function ScoreModal({ match, onClose, onSuccess }) {
                   }}
                 >
                   🚫 Walk Out<br/>
-                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.8 }}>Tidak hadir / Mengundurkan diri</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, opacity: 0.8 }}>No-show / Withdrawal</span>
                 </button>
               </div>
 
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-                <strong>{retireTeamId === match.homeTeamId ? awayName : homeName}</strong> akan otomatis memenangkan match ini.
+                <strong>{retireTeamId === match.homeTeamId ? awayName : homeName}</strong> will automatically win this match.
               </p>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -978,7 +960,7 @@ function ScoreModal({ match, onClose, onSuccess }) {
                   disabled={saving}
                   style={{ fontSize: 13, padding: '8px 16px' }}
                 >
-                  Batal
+                  Cancel
                 </button>
               </div>
             </div>

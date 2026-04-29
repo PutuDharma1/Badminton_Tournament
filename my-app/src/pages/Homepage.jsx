@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
-import { MapPin, Calendar, Users, Target, User, Scale, ArrowRight } from 'lucide-react';
+import { MapPin, Calendar, Users, Target, User, Scale, ArrowRight, Search, X } from 'lucide-react';
+import Toast from '../components/Toast';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -201,7 +202,6 @@ function FilterTabs({ filter, onChange, counts }) {
   const tabs = [
     { key: 'all',      label: 'All',      count: counts.all },
     { key: 'ongoing',  label: 'Ongoing',  count: counts.ongoing },
-    { key: 'draft',    label: 'Draft',    count: counts.draft },
     { key: 'finished', label: 'Finished', count: counts.finished },
   ];
 
@@ -260,7 +260,11 @@ export default function Homepage() {
   const { user, isAuthenticated, hasRole } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'success') => setToast({ message, type });
   const [filter, setFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -268,23 +272,39 @@ export default function Homepage() {
         setLoading(true);
         setTournaments(await tournamentsApi.getTournaments());
       } catch (err) {
-        console.error(err);
+        showToast(`Failed to load tournaments: ${err.message}`, 'error');
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const counts = {
-    all:      tournaments.length,
-    ongoing:  tournaments.filter(t => t.status === 'ONGOING').length,
-    draft:    tournaments.filter(t => t.status === 'DRAFT').length,
-    finished: tournaments.filter(t => t.status === 'FINISHED').length,
+  // Hide DRAFT from public — only committee members see drafts
+  const visibleTournaments = isAuthenticated && hasRole('COMMITTEE')
+    ? tournaments
+    : tournaments.filter(t => t.status !== 'DRAFT');
+
+  const getCity = (location) => {
+    if (!location) return '';
+    const parts = location.split(',');
+    return parts[parts.length - 1].trim();
   };
 
-  const filtered = filter === 'all'
-    ? tournaments
-    : tournaments.filter(t => t.status === filter.toUpperCase());
+  const cities = [...new Set(visibleTournaments.map(t => getCity(t.location)).filter(Boolean))].sort();
+
+  const counts = {
+    all:      visibleTournaments.length,
+    ongoing:  visibleTournaments.filter(t => t.status === 'ONGOING').length,
+    finished: visibleTournaments.filter(t => t.status === 'FINISHED').length,
+  };
+
+  const filtered = visibleTournaments
+    .filter(t => filter === 'all' || t.status === filter.toUpperCase())
+    .filter(t => !cityFilter || getCity(t.location) === cityFilter)
+    .filter(t => {
+      const q = searchQuery.trim().toLowerCase();
+      return !q || t.name.toLowerCase().includes(q) || t.location?.toLowerCase().includes(q);
+    });
 
   if (loading) {
     return (
@@ -383,16 +403,76 @@ export default function Homepage() {
         gap: 12,
         flexWrap: 'wrap',
       }}>
-        <h2 className="section-title">Tournaments</h2>
-        {counts.all > 0 && (
-          <span style={{
-            fontSize: 12,
-            color: 'var(--text-faint)',
-            fontWeight: 500,
-          }}>
-            {counts.all} total
-          </span>
-        )}
+        <h2 className="section-title" style={{ margin: 0 }}>Tournaments</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Search bar */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} style={{
+              position: 'absolute', left: 10,
+              color: 'var(--text-faint)', pointerEvents: 'none',
+            }} aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Search tournaments…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              aria-label="Search tournaments"
+              style={{
+                paddingLeft: 32, paddingRight: searchQuery ? 30 : 12,
+                paddingTop: 7, paddingBottom: 7,
+                fontSize: 13,
+                background: 'var(--bg-card)',
+                border: '1.5px solid var(--border)',
+                borderRadius: 9,
+                color: 'var(--text-primary)',
+                outline: 'none',
+                width: 200,
+                transition: 'border-color 0.15s',
+                fontFamily: 'var(--font-body)',
+              }}
+              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                style={{
+                  position: 'absolute', right: 8,
+                  background: 'none', border: 'none',
+                  color: 'var(--text-faint)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', padding: 0,
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          {cities.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <MapPin size={13} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+              <select
+                value={cityFilter}
+                onChange={e => setCityFilter(e.target.value)}
+                style={{
+                  fontSize: 12.5, padding: '5px 10px', borderRadius: 7,
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-card)', color: 'var(--text-primary)',
+                  cursor: 'pointer', outline: 'none',
+                  fontFamily: 'var(--font-body)',
+                }}
+              >
+                <option value="">All Cities</option>
+                {cities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          {counts.all > 0 && (
+            <span style={{ fontSize: 12, color: 'var(--text-faint)', fontWeight: 500 }}>
+              {filtered.length}{counts.all !== filtered.length ? `/${counts.all}` : ''} tournaments
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Filter tabs */}
@@ -454,6 +534,8 @@ export default function Homepage() {
           ))}
         </div>
       )}
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

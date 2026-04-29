@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const CheckIcon = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -44,17 +45,16 @@ function Toast({ message, type = 'success', onClose }) {
   }, [onClose]);
 
   const cfg = TOAST_CFG[type] || TOAST_CFG.info;
-  // Errors are urgent — use "assertive" so screen readers interrupt immediately
   const liveRegion = type === 'error' ? 'assertive' : 'polite';
 
-  return (
+  return createPortal(
     <div
       role={type === 'error' ? 'alert' : 'status'}
       aria-live={liveRegion}
       aria-atomic="true"
       style={{
         position: 'fixed',
-        bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+        top: 'calc(20px + env(safe-area-inset-top, 0px))',
         right: 24,
         background: cfg.bg,
         border: `1px solid ${cfg.border}`,
@@ -69,10 +69,9 @@ function Toast({ message, type = 'success', onClose }) {
         fontSize: 13.5,
         fontWeight: 500,
         maxWidth: 360,
-        animation: 'slideIn 0.25s ease-out',
+        animation: 'toastIn 0.25s ease-out',
       }}
     >
-      {/* Type icon */}
       <span style={{
         width: 20, height: 20, borderRadius: '50%',
         background: 'rgba(255,255,255,0.2)',
@@ -98,7 +97,8 @@ function Toast({ message, type = 'success', onClose }) {
       >
         <CloseIcon />
       </button>
-    </div>
+    </div>,
+    document.body
   );
 }
 

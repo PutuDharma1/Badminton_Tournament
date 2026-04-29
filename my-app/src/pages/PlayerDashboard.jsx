@@ -395,6 +395,8 @@ function PlayerDashboard() {
     }
   };
 
+  const [cityFilter, setCityFilter] = useState('');
+
   const stats = {
     joined:   myTournaments.length,
     ongoing:  myTournaments.filter(t => t.status === 'ONGOING').length,
@@ -467,36 +469,75 @@ function PlayerDashboard() {
       )}
 
       {/* ── Available Tournaments ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <h2 className="section-title">Available to Join</h2>
-        {availableTournaments.length > 0 && (
-          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{availableTournaments.length} tournaments</span>
-        )}
-      </div>
-      <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 16 }}>
-        Tournaments open for registration. Only DRAFT tournaments accept new players.
-      </p>
-
-      {availableTournaments.length === 0 ? (
-        <div style={{
-          textAlign: 'center', padding: '40px 24px',
-          background: 'var(--bg-card)', borderRadius: 14,
-          border: '1.5px dashed var(--border)',
-        }}>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>No tournaments available right now.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-          {availableTournaments.map(t => (
-            <AvailableTournamentCard
-              key={t.id}
-              tournament={t}
-              onRegister={() => setShowRegisterModal(t)}
-              isRegistering={registering === t.id}
-            />
-          ))}
-        </div>
-      )}
+      {(() => {
+        const availCities = [...new Set(availableTournaments.map(t => t.location).filter(Boolean))].sort();
+        const filteredAvail = cityFilter
+          ? availableTournaments.filter(t => t.location === cityFilter)
+          : availableTournaments;
+        return (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+              <h2 className="section-title">Available to Join</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {availCities.length > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <MapPin size={13} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+                    <select
+                      value={cityFilter}
+                      onChange={e => setCityFilter(e.target.value)}
+                      style={{
+                        fontSize: 12.5, padding: '5px 10px', borderRadius: 7,
+                        border: '1px solid var(--border)',
+                        background: 'var(--bg-card)', color: 'var(--text-primary)',
+                        cursor: 'pointer', outline: 'none',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      <option value="">All Cities</option>
+                      {availCities.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                )}
+                {availableTournaments.length > 0 && (
+                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+                    {filteredAvail.length}{cityFilter ? `/${availableTournaments.length}` : ''} tournaments
+                  </span>
+                )}
+              </div>
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 16 }}>
+              Tournaments open for registration. Only DRAFT tournaments accept new players.
+            </p>
+            {filteredAvail.length === 0 ? (
+              <div style={{
+                textAlign: 'center', padding: '40px 24px',
+                background: 'var(--bg-card)', borderRadius: 14,
+                border: '1.5px dashed var(--border)',
+              }}>
+                <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
+                  {cityFilter ? `No tournaments in ${cityFilter}.` : 'No tournaments available right now.'}
+                </p>
+                {cityFilter && (
+                  <button className="btn-outline" onClick={() => setCityFilter('')} style={{ marginTop: 12, fontSize: 12 }}>
+                    View all cities
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+                {filteredAvail.map(t => (
+                  <AvailableTournamentCard
+                    key={t.id}
+                    tournament={t}
+                    onRegister={() => setShowRegisterModal(t)}
+                    isRegistering={registering === t.id}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* ── Register Modal ── */}
       {showRegisterModal && (

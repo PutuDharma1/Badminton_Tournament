@@ -97,64 +97,75 @@ html, body, #root {
    DESIGN TOKENS — DARK MODE
 ═══════════════════════════════════════════ */
 html.dark {
-  --bg-base:        #0f0d0a;
-  --bg-card:        #1a1712;
-  --bg-card-hover:  #231f1a;
-  --bg-subtle:      #1f1c17;
-  --bg-input:       #1a1712;
-  --bg-overlay:     rgba(15, 13, 10, 0.92);
+  /* Surfaces — clear 4-layer hierarchy */
+  --bg-base:        #0c0a07;
+  --bg-card:        #181410;
+  --bg-card-hover:  #211d17;
+  --bg-subtle:      #1c1814;
+  --bg-input:       #130f09;
+  --bg-overlay:     rgba(12, 10, 7, 0.95);
 
-  --text-primary:   #f0ebe2;
-  --text-secondary: #c8c3b8;
-  --text-muted:     #8a8478;
-  --text-faint:     #5c5750;
-  --text-link:      #4ade80;
+  /* Text — warm white with strong contrast */
+  --text-primary:   #f3ece0;
+  --text-secondary: #d0c8bb;
+  --text-muted:     #968e82;
+  --text-faint:     #655d53;
+  --text-link:      #4edd98;
 
-  --border:         #2d2924;
-  --border-strong:  #403b35;
-  --border-focus:   #22c55e;
+  /* Borders — visible enough to define cards clearly */
+  --border:         #302b24;
+  --border-strong:  #453e34;
+  --border-focus:   #2dd68e;
 
-  --accent:         #22c55e;
-  --accent-dark:    #16a34a;
-  --accent-rgb:     34, 197, 94;
+  /* Accent — brighter emerald that pops on dark warm bg */
+  --accent:         #2dd68e;
+  --accent-dark:    #1ab97a;
+  --accent-rgb:     45, 214, 142;
   --accent-orange:  #fb923c;
   --accent-orange-rgb: 251, 146, 60;
 
-  --status-scheduled-bg:     rgba(96, 165, 250, 0.1);
-  --status-scheduled-border: #3b82f6;
+  /* Status — vibrant, readable on dark */
+  --status-scheduled-bg:     rgba(96, 165, 250, 0.12);
+  --status-scheduled-border: #60a5fa;
   --status-scheduled-text:   #93c5fd;
-  --status-ongoing-bg:       rgba(251, 146, 60, 0.1);
+  --status-ongoing-bg:       rgba(251, 146, 60, 0.12);
   --status-ongoing-border:   #f97316;
-  --status-ongoing-text:     #fdba74;
-  --status-finished-bg:      rgba(34, 197, 94, 0.08);
-  --status-finished-border:  #22c55e;
-  --status-finished-text:    #86efac;
+  --status-ongoing-text:     #fb923c;
+  --status-finished-bg:      rgba(45, 214, 142, 0.1);
+  --status-finished-border:  #2dd68e;
+  --status-finished-text:    #6ee7b7;
 
-  --danger-bg:      rgba(239, 68, 68, 0.1);
-  --danger-border:  #ef4444;
-  --danger-text:    #f87171;
+  /* Danger */
+  --danger-bg:      rgba(239, 68, 68, 0.12);
+  --danger-border:  #f87171;
+  --danger-text:    #fca5a5;
 
-  --table-row-border:   #2d2924;
-  --table-header-text:  #8a8478;
+  /* Table */
+  --table-row-border:   #231f18;
+  --table-header-text:  #968e82;
 
-  --chip-bg:      rgba(45, 41, 36, 0.7);
-  --chip-border:  #403b35;
+  /* Match chip */
+  --chip-bg:      rgba(48, 43, 36, 0.8);
+  --chip-border:  #453e34;
 
-  --round-btn-bg:              #1a1712;
-  --round-btn-bg-active:       rgba(34, 197, 94, 0.12);
-  --round-btn-border:          #2d2924;
-  --round-btn-border-active:   #22c55e;
-  --round-btn-text:            #8a8478;
-  --round-btn-text-active:     #4ade80;
+  /* Round button */
+  --round-btn-bg:              #181410;
+  --round-btn-bg-active:       rgba(45, 214, 142, 0.1);
+  --round-btn-border:          #302b24;
+  --round-btn-border-active:   #2dd68e;
+  --round-btn-text:            #968e82;
+  --round-btn-text-active:     #2dd68e;
 
-  --modal-bg:     #1a1712;
-  --modal-border: #2d2924;
+  /* Modal */
+  --modal-bg:     #181410;
+  --modal-border: #302b24;
 
-  --section-text: #f0ebe2;
+  --section-text: #f3ece0;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover: 0 4px 20px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.4);
+  /* Shadows — deep, dramatic */
+  --shadow-card:       0 1px 3px rgba(0,0,0,0.65), 0 4px 20px rgba(0,0,0,0.4);
+  --shadow-card-hover: 0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4), 0 0 0 1px rgba(45,214,142,0.07);
+  --shadow-modal:      0 24px 80px rgba(0,0,0,0.85), 0 8px 32px rgba(0,0,0,0.5);
 }
 
 /* ═══════════════════════════════════════════
@@ -183,11 +194,16 @@ body::before {
   opacity: 0.7;
 }
 
+/* Warm radial gradient for depth — top glow */
+html.dark body {
+  background: radial-gradient(ellipse 130% 45% at 50% 0%, #1c1409 0%, #0c0a07 55%);
+}
+
 html.dark body::before {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  opacity: 0.5;
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  opacity: 0.6;
 }
 
 #root { position: relative; z-index: 1; }
@@ -260,8 +276,60 @@ html.dark body::before {
 }
 
 html.dark .navbar {
-  background: rgba(15, 13, 10, 0.82);
-  border-bottom-color: var(--border);
+  background: rgba(12, 10, 7, 0.9);
+  border-bottom: 1px solid rgba(48, 43, 36, 0.9);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 4px 28px rgba(0,0,0,0.3);
+}
+
+/* Cards — top-edge highlight for glass-depth effect */
+html.dark .card,
+html.dark .stat-card,
+html.dark .match-card,
+html.dark .form-card {
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.65),
+    0 4px 20px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  border-color: #302b24;
+}
+
+/* Stat card accent strip — subtle glow */
+html.dark .stat-card::before {
+  opacity: 1;
+  filter: blur(1px);
+}
+
+/* Inputs — distinct sunken look */
+html.dark .form-input,
+html.dark .form-select {
+  background: #100d08;
+  border-color: #302b24;
+}
+
+html.dark .form-input:focus,
+html.dark .form-select:focus {
+  background: #130f09;
+  border-color: #2dd68e;
+  box-shadow: 0 0 0 3px rgba(45, 214, 142, 0.1);
+}
+
+/* Dropdown menu — stronger shadow */
+html.dark .dropdown-menu {
+  background: #1e1a15;
+  border-color: #302b24;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* Btn outline — more visible in dark */
+html.dark .btn-outline {
+  border-color: #453e34;
+  color: #d0c8bb !important;
+}
+
+html.dark .btn-outline:hover:not(:disabled) {
+  background: #211d17;
+  border-color: #2dd68e;
+  color: #2dd68e !important;
 }
 
 .nav-inner {
@@ -928,6 +996,10 @@ html.dark .navbar {
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(20px); }
   to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-8px) translateX(8px); }
+  to   { opacity: 1; transform: translateY(0) translateX(0); }
 }
 
 /* ═══════════════════════════════════════════

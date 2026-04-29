@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import participantsApi from '../api/participants';
+import Toast from '../components/Toast';
 
 const ROLE_CFG = {
   PLAYER:    { color: '#22c55e', bg: 'rgba(34,197,94,0.1)',   label: 'Player' },
@@ -11,6 +12,8 @@ const ROLE_CFG = {
 function Peserta() {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'success') => setToast({ message, type });
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
 
@@ -27,7 +30,7 @@ function Peserta() {
         const results = await participantsApi.searchUsers(debouncedQuery);
         setPlayers(results);
       } catch (err) {
-        console.error(err);
+        showToast(`Failed to load players: ${err.message}`, 'error');
       } finally {
         setLoading(false);
       }
@@ -158,6 +161,7 @@ function Peserta() {
           </div>
         </>
       )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

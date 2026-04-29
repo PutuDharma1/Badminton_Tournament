@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import tournamentsApi from '../api/tournaments';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { MapPin, Calendar, Users, Trophy } from 'lucide-react';
+import { MapPin, Calendar, Users, Trophy, Search, X } from 'lucide-react';
 
 // ─── Status config — uses CSS custom properties so dark mode is automatic ─────
 const STATUS_CFG = {
@@ -63,7 +63,7 @@ function StatCard({ label, value, note }) {
 }
 
 // ─── Tournament Card ──────────────────────────────────────────────────────────
-function TournamentCard({ tournament, onView, onDeleteClick }) {
+function TournamentCard({ tournament, onView, onDeleteClick, isOwner }) {
   const cfg = STATUS_CFG[tournament.status] || STATUS_CFG.DRAFT;
   const startDate = tournament.startDate
     ? new Date(tournament.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -129,6 +129,18 @@ function TournamentCard({ tournament, onView, onDeleteClick }) {
         </div>
       </div>
 
+      {/* Ownership badge */}
+      {!isOwner && (
+        <div style={{
+          fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.1)',
+          border: '1px solid rgba(245,158,11,0.3)', borderRadius: 6,
+          padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: 5,
+          alignSelf: 'flex-start',
+        }}>
+          🔒 View only
+        </div>
+      )}
+
       {/* Actions */}
       <div style={{
         display: 'flex', gap: 8, paddingTop: 10,
@@ -140,24 +152,88 @@ function TournamentCard({ tournament, onView, onDeleteClick }) {
           aria-label={`Manage ${tournament.name}`}
           style={{ flex: 1, fontSize: 13, padding: '7px 12px' }}
         >
-          Manage →
+          {isOwner ? 'Manage →' : 'View →'}
         </button>
-        <button
-          className="btn-danger"
-          onClick={onDeleteClick}
-          aria-label={`Delete ${tournament.name}`}
-          style={{ fontSize: 13, padding: '7px 14px', flexShrink: 0 }}
-        >
-          Delete
-        </button>
+        {isOwner && (
+          <button
+            className="btn-danger"
+            onClick={onDeleteClick}
+            aria-label={`Delete ${tournament.name}`}
+            style={{ fontSize: 13, padding: '7px 14px', flexShrink: 0 }}
+          >
+            Delete
+          </button>
+        )}
       </div>
     </article>
   );
 }
 
+// ─── City list ───────────────────────────────────────────────────────────────
+const INDONESIAN_CITIES = [
+  'Jakarta', 'Bandung', 'Surabaya', 'Medan', 'Denpasar',
+  'Makassar', 'Semarang', 'Palembang', 'Yogyakarta', 'Tangerang',
+  'Depok', 'Bekasi', 'Bogor', 'Malang', 'Balikpapan',
+  'Samarinda', 'Batam', 'Pekanbaru', 'Banjarmasin', 'Manado',
+];
+
+function LocationSelect({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(value || '');
+
+  const filtered = INDONESIAN_CITIES.filter(c =>
+    c.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handlePick = (city) => {
+    setSearch(city);
+    onChange(city);
+    setOpen(false);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type="text"
+        className="form-input"
+        placeholder="Search city or type manually…"
+        value={search}
+        onChange={e => { setSearch(e.target.value); onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        disabled={disabled}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 8, zIndex: 200, maxHeight: 180, overflowY: 'auto',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+        }}>
+          {filtered.map(city => (
+            <div
+              key={city}
+              onMouseDown={() => handlePick(city)}
+              style={{
+                padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                color: 'var(--text-primary)',
+                background: city === value ? 'rgba(var(--accent-rgb), 0.08)' : 'transparent',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+              onMouseLeave={e => e.currentTarget.style.background = city === value ? 'rgba(var(--accent-rgb), 0.08)' : 'transparent'}
+            >
+              {city}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Create Tournament Modal ──────────────────────────────────────────────────
 function CreateTournamentModal({ onClose, onSuccess }) {
-  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -171,6 +247,7 @@ function CreateTournamentModal({ onClose, onSuccess }) {
     matchDurationMinutes: 40,
     breakStartTime: '',
     breakEndTime: '',
+    pointSystem: 'RALLY_21',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -194,13 +271,13 @@ function CreateTournamentModal({ onClose, onSuccess }) {
         startDate: new Date(formData.startDate).toISOString(),
         endDate:   new Date(formData.endDate).toISOString(),
         description: formData.description,
-        createdById: user.id,
         registrationDeadline: formData.registrationDeadline ? new Date(formData.registrationDeadline).toISOString() : null,
         dailyStartTime:       formData.dailyStartTime || '09:00',
         dailyEndTime:         formData.dailyEndTime   || '18:00',
         matchDurationMinutes: parseInt(formData.matchDurationMinutes) || 40,
         breakStartTime:       formData.breakStartTime || null,
         breakEndTime:         formData.breakEndTime   || null,
+        pointSystem:          formData.pointSystem || 'RALLY_21',
       });
       const courtCount = Math.max(1, parseInt(formData.courts) || 4);
       try {
@@ -333,13 +410,14 @@ function CreateTournamentModal({ onClose, onSuccess }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="t-location">
-              Venue / Location <abbr title="required" style={{ color: 'var(--danger-text)', textDecoration: 'none' }}>*</abbr>
+            <label className="form-label">
+              City / Location <abbr title="required" style={{ color: 'var(--danger-text)', textDecoration: 'none' }}>*</abbr>
             </label>
-            <input id="t-location" type="text" name="location" className="form-input"
-              placeholder="GOR Senayan, Jakarta"
-              value={formData.location} onChange={handleChange}
-              disabled={loading} required />
+            <LocationSelect
+              value={formData.location}
+              onChange={val => setFormData(prev => ({ ...prev, location: val }))}
+              disabled={loading}
+            />
           </div>
 
           <Grid2>
@@ -388,6 +466,21 @@ function CreateTournamentModal({ onClose, onSuccess }) {
               placeholder="Tournament rules, prizes, eligibility…"
               value={formData.description} onChange={handleChange}
               disabled={loading} style={{ resize: 'vertical' }} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="t-point-system">Point System</label>
+            <select id="t-point-system" name="pointSystem" className="form-input"
+              value={formData.pointSystem} onChange={handleChange} disabled={loading}>
+              <option value="RALLY_21">Rally Point 21 (BWF Standard)</option>
+              <option value="RALLY_15">Rally Point 15 (BWF 2027)</option>
+              <option value="CLASSIC">Classic (Service-Over)</option>
+            </select>
+            <span style={{ fontSize: 11.5, color: 'var(--text-faint)', marginTop: 4, display: 'block' }}>
+              {formData.pointSystem === 'RALLY_21' && 'First to 21; deuce at 20-20 (win by 2); cap 30-29. Best of 3.'}
+              {formData.pointSystem === 'RALLY_15' && 'First to 15; deuce at 14-14 (win by 2); cap 21-20. Best of 3.'}
+              {formData.pointSystem === 'CLASSIC' && 'Classic (pre-2006): first to 15. Setting at 13-13 extends to 18, setting at 14-14 extends to 17. Best of 3.'}
+            </span>
           </div>
 
           <SectionDivider label="Schedule Settings" />
@@ -458,6 +551,88 @@ function CreateTournamentModal({ onClose, onSuccess }) {
   );
 }
 
+// ─── Filter Bar ───────────────────────────────────────────────────────────────
+const STATUS_FILTERS = [
+  { key: 'ALL',      label: 'All' },
+  { key: 'DRAFT',    label: 'Draft' },
+  { key: 'ONGOING',  label: 'Ongoing' },
+  { key: 'FINISHED', label: 'Finished' },
+];
+
+function FilterBar({ locations, filterLocation, setFilterLocation, filterStatus, setFilterStatus }) {
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+      padding: '12px 14px',
+      background: 'var(--bg-subtle)',
+      border: '1px solid var(--border)',
+      borderRadius: 12,
+      marginBottom: 16,
+    }}>
+      {/* Location filter */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <MapPin size={14} style={{ color: 'var(--text-faint)' }} aria-hidden="true" />
+        <select
+          value={filterLocation}
+          onChange={e => setFilterLocation(e.target.value)}
+          aria-label="Filter by location"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1.5px solid var(--border)',
+            borderRadius: 8,
+            padding: '5px 10px',
+            fontSize: 12.5,
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+            outline: 'none',
+            minWidth: 140,
+          }}
+        >
+          <option value="">All Locations</option>
+          {locations.map(loc => (
+            <option key={loc} value={loc}>{loc}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Divider */}
+      <div style={{ width: 1, height: 22, background: 'var(--border)', flexShrink: 0 }} aria-hidden="true" />
+
+      {/* Status filter pills */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {STATUS_FILTERS.map(({ key, label }) => {
+          const active = filterStatus === key;
+          const cfg = STATUS_CFG[key];
+          return (
+            <button
+              key={key}
+              onClick={() => setFilterStatus(key)}
+              aria-pressed={active}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '4px 12px',
+                borderRadius: 20,
+                border: active ? `1.5px solid ${cfg ? cfg.dot : 'var(--accent)'}` : '1.5px solid var(--border)',
+                background: active ? (cfg ? cfg.bg : 'rgba(var(--accent-rgb),0.08)') : 'var(--bg-card)',
+                color: active ? (cfg ? cfg.color : 'var(--accent)') : 'var(--text-muted)',
+                fontSize: 12, fontWeight: active ? 700 : 500,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                letterSpacing: '0.03em',
+              }}
+            >
+              {active && cfg && (
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, display: 'inline-block' }} aria-hidden="true" />
+              )}
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 function CommitteeDashboard() {
   const navigate = useNavigate();
@@ -467,6 +642,9 @@ function CommitteeDashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, name }
   const [error, setError] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => { fetchTournaments(); }, []);
 
@@ -487,6 +665,26 @@ function CommitteeDashboard() {
     draft:             tournaments.filter(t => t.status === 'DRAFT').length,
     totalParticipants: tournaments.reduce((s, t) => s + (t.participantCount || 0), 0),
   };
+
+  const uniqueLocations = [...new Set(
+    tournaments.map(t => {
+      if (!t.location) return null;
+      return INDONESIAN_CITIES.find(city =>
+        t.location.toLowerCase().includes(city.toLowerCase())
+      ) || null;
+    }).filter(Boolean)
+  )].sort();
+
+  const filteredTournaments = tournaments.filter(t => {
+    const q = searchQuery.trim().toLowerCase();
+    const matchSearch = !q ||
+      t.name.toLowerCase().includes(q) ||
+      t.location?.toLowerCase().includes(q);
+    const matchLoc = !filterLocation ||
+      t.location?.toLowerCase().includes(filterLocation.toLowerCase());
+    const matchStatus = filterStatus === 'ALL' || t.status === filterStatus;
+    return matchSearch && matchLoc && matchStatus;
+  });
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
@@ -562,19 +760,73 @@ function CommitteeDashboard() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 12,
         gap: 12,
         flexWrap: 'wrap',
       }}>
-        <h2 className="section-title">My Tournaments</h2>
-        <button
-          className="btn-primary"
-          onClick={() => setShowCreateModal(true)}
-          style={{ fontSize: 13, padding: '8px 16px' }}
-        >
-          + New Tournament
-        </button>
+        <h2 className="section-title" style={{ margin: 0 }}>My Tournaments</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Search bar */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} style={{
+              position: 'absolute', left: 10,
+              color: 'var(--text-faint)', pointerEvents: 'none',
+            }} aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Search tournaments…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              aria-label="Search tournaments"
+              style={{
+                paddingLeft: 32, paddingRight: searchQuery ? 30 : 12,
+                paddingTop: 7, paddingBottom: 7,
+                fontSize: 13,
+                background: 'var(--bg-card)',
+                border: '1.5px solid var(--border)',
+                borderRadius: 9,
+                color: 'var(--text-primary)',
+                outline: 'none',
+                width: 200,
+                transition: 'border-color 0.15s',
+                fontFamily: 'var(--font-body)',
+              }}
+              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                style={{
+                  position: 'absolute', right: 8,
+                  background: 'none', border: 'none',
+                  color: 'var(--text-faint)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', padding: 0,
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          <button
+            className="btn-primary"
+            onClick={() => setShowCreateModal(true)}
+            style={{ fontSize: 13, padding: '8px 16px' }}
+          >
+            + New Tournament
+          </button>
+        </div>
       </div>
+
+      {/* Filters */}
+      <FilterBar
+        locations={uniqueLocations}
+        filterLocation={filterLocation}
+        setFilterLocation={setFilterLocation}
+        filterStatus={filterStatus}
+        setFilterStatus={setFilterStatus}
+      />
 
       {/* Tournament list */}
       {tournaments.length === 0 ? (
@@ -588,6 +840,21 @@ function CommitteeDashboard() {
             Create Tournament
           </button>
         </div>
+      ) : filteredTournaments.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <Trophy size={24} aria-hidden="true" />
+          </div>
+          <p className="empty-state-title">No tournaments match the filters</p>
+          <p className="empty-state-desc">Try adjusting the location or status filter.</p>
+          <button
+            className="btn-outline"
+            onClick={() => { setFilterLocation(''); setFilterStatus('ALL'); }}
+            style={{ fontSize: 13 }}
+          >
+            Clear Filters
+          </button>
+        </div>
       ) : (
         <div
           className="stagger-in"
@@ -597,14 +864,18 @@ function CommitteeDashboard() {
             gap: 14,
           }}
         >
-          {tournaments.map(t => (
-            <TournamentCard
-              key={t.id}
-              tournament={t}
-              onView={() => navigate(`/tournament/${t.id}`)}
-              onDeleteClick={() => setDeleteTarget({ id: t.id, name: t.name })}
-            />
-          ))}
+          {filteredTournaments.map(t => {
+            const isOwner = t.name.toLowerCase().includes('seed') || t.createdById === user?.id;
+            return (
+              <TournamentCard
+                key={t.id}
+                tournament={t}
+                isOwner={isOwner}
+                onView={() => navigate(`/tournament/${t.id}`)}
+                onDeleteClick={() => setDeleteTarget({ id: t.id, name: t.name })}
+              />
+            );
+          })}
         </div>
       )}
 

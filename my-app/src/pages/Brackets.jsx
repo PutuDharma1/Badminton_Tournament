@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import tournamentsApi from '../api/tournaments';
 import matchesApi from '../api/matches';
-import { Trophy, RefreshCw, MapPin, Calendar } from 'lucide-react';
+import { Trophy, RefreshCw, MapPin, Calendar, Search, X } from 'lucide-react';
+import Toast from '../components/Toast';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function Brackets() {
@@ -10,8 +11,11 @@ export default function Brackets() {
   const [tournament, setTournament] = useState(null);
   const [knockoutMatches, setKnockoutMatches] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'success') => setToast({ message, type });
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -21,7 +25,7 @@ export default function Brackets() {
         const ongoing = data.find(t => t.status === 'ONGOING');
         if (ongoing) setSelectedId(String(ongoing.id));
         else if (data.length > 0) setSelectedId(String(data[0].id));
-      } catch (e) { console.error(e); }
+      } catch (e) { showToast(`Failed to load tournaments: ${e.message}`, 'error'); }
     })();
   }, []);
 
@@ -35,7 +39,7 @@ export default function Brackets() {
       ]);
       setTournament(tData);
       setKnockoutMatches(koData);
-    } catch (e) { console.error(e); }
+    } catch (e) { showToast(`Failed to load bracket data: ${e.message}`, 'error'); }
     finally { setLoading(false); }
   }, [selectedId]);
 
@@ -46,6 +50,13 @@ export default function Brackets() {
     const iv = setInterval(fetchData, 15000);
     return () => clearInterval(iv);
   }, [autoRefresh, selectedId, fetchData]);
+
+  const filteredTournamentList = searchQuery.trim()
+    ? tournaments.filter(t =>
+        t.name.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+        t.location?.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      )
+    : tournaments;
 
   const brackets = buildBrackets(tournament, knockoutMatches);
   const selectedT = tournaments.find(t => String(t.id) === selectedId);
@@ -112,21 +123,68 @@ export default function Brackets() {
         display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
         marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--border)',
       }}>
-        <div className="form-group" style={{ margin: 0, minWidth: 240 }}>
-          <label className="form-label">Tournament</label>
-          <select
-            className="form-input"
-            value={selectedId}
-            onChange={e => { setSelectedId(e.target.value); setActiveCategory(null); }}
-            style={{ fontSize: 13 }}
-          >
-            <option value="">— Select tournament —</option>
-            {tournaments.map(t => (
-              <option key={t.id} value={String(t.id)}>
-                {t.name} ({t.status})
-              </option>
-            ))}
-          </select>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 240 }}>
+          {/* Search */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} style={{
+              position: 'absolute', left: 10,
+              color: 'var(--text-faint)', pointerEvents: 'none',
+            }} aria-hidden="true" />
+            <input
+              type="text"
+              placeholder="Search tournaments…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              aria-label="Search tournaments"
+              style={{
+                width: '100%',
+                paddingLeft: 32, paddingRight: searchQuery ? 30 : 12,
+                paddingTop: 7, paddingBottom: 7,
+                fontSize: 13,
+                background: 'var(--bg-card)',
+                border: '1.5px solid var(--border)',
+                borderRadius: 9,
+                color: 'var(--text-primary)',
+                outline: 'none',
+                transition: 'border-color 0.15s',
+                fontFamily: 'var(--font-body)',
+                boxSizing: 'border-box',
+              }}
+              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+              onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+                style={{
+                  position: 'absolute', right: 8,
+                  background: 'none', border: 'none',
+                  color: 'var(--text-faint)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', padding: 0,
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          {/* Select */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Tournament</label>
+            <select
+              className="form-input"
+              value={selectedId}
+              onChange={e => { setSelectedId(e.target.value); setActiveCategory(null); }}
+              style={{ fontSize: 13 }}
+            >
+              <option value="">— Select tournament —</option>
+              {filteredTournamentList.map(t => (
+                <option key={t.id} value={String(t.id)}>
+                  {t.name} ({t.status})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {selectedT && (
@@ -285,6 +343,8 @@ export default function Brackets() {
           50% { opacity: 0.4; box-shadow: 0 0 2px #ef4444; }
         }
       `}</style>
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
@@ -319,25 +379,102 @@ function EmptyState({ icon, title, subtitle }) {
 
 // ─── Bracket Tree ─────────────────────────────────────────────────────────────
 function BracketTree({ bracket }) {
+  const wrapperRef = useRef(null);
+  const cardRefs = useRef({});
+  const [paths, setPaths] = useState([]);
+
+  const setCardRef = useCallback((key, el) => {
+    if (el) cardRefs.current[key] = el;
+    else delete cardRefs.current[key];
+  }, []);
+
+  const recalc = useCallback(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const wRect = wrapper.getBoundingClientRect();
+    const newPaths = [];
+
+    bracket.rounds.forEach((roundObj, rIdx) => {
+      if (rIdx === bracket.rounds.length - 1) return;
+      const pairCount = Math.floor(roundObj.matches.length / 2);
+
+      for (let pair = 0; pair < pairCount; pair++) {
+        const topEl = cardRefs.current[`${rIdx}_${pair * 2}`];
+        const botEl = cardRefs.current[`${rIdx}_${pair * 2 + 1}`];
+        const nextEl = cardRefs.current[`${rIdx + 1}_${pair}`];
+        if (!topEl || !botEl || !nextEl) continue;
+
+        const topR = topEl.getBoundingClientRect();
+        const botR = botEl.getBoundingClientRect();
+        const nextR = nextEl.getBoundingClientRect();
+
+        const x1   = topR.right  - wRect.left;
+        const y1   = (topR.top  + topR.bottom)  / 2 - wRect.top;
+        const y2   = (botR.top  + botR.bottom)  / 2 - wRect.top;
+        const x2   = nextR.left  - wRect.left;
+        const xMid = (x1 + x2) / 2;
+        const yMid = (y1 + y2) / 2;
+
+        const topDone = roundObj.matches[pair * 2]?.status === 'FINISHED';
+        const botDone = roundObj.matches[pair * 2 + 1]?.status === 'FINISHED';
+
+        newPaths.push({ id: `${rIdx}_${pair}`, x1, y1, y2, xMid, yMid, x2, topDone, botDone });
+      }
+    });
+
+    setPaths(newPaths);
+  }, [bracket]);
+
+  useLayoutEffect(() => { recalc(); }, [recalc]);
+
+  useEffect(() => {
+    window.addEventListener('resize', recalc);
+    return () => window.removeEventListener('resize', recalc);
+  }, [recalc]);
+
   return (
-    <div style={{
+    <div ref={wrapperRef} style={{
       display: 'flex', gap: 0, alignItems: 'stretch',
       minWidth: 'max-content', paddingBottom: 8,
+      position: 'relative',
     }}>
       {bracket.rounds.map((roundObj, rIdx) => (
         <RoundColumn
           key={rIdx}
           roundObj={roundObj}
+          rIdx={rIdx}
           isLast={rIdx === bracket.rounds.length - 1}
+          setCardRef={setCardRef}
         />
       ))}
+
+      {/* SVG connector overlay */}
+      <svg style={{
+        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+        pointerEvents: 'none', overflow: 'visible',
+      }}>
+        {paths.map(({ id, x1, y1, y2, xMid, yMid, x2, topDone, botDone }) => {
+          const active = topDone || botDone;
+          const stroke = active ? 'var(--accent)' : 'var(--border)';
+          const sw = active ? 1.5 : 1;
+          const op = active ? 0.55 : 1;
+          return (
+            <g key={id} opacity={op}>
+              <line x1={x1}   y1={y1}   x2={xMid} y2={y1}   stroke={stroke} strokeWidth={sw} />
+              <line x1={x1}   y1={y2}   x2={xMid} y2={y2}   stroke={stroke} strokeWidth={sw} />
+              <line x1={xMid} y1={y1}   x2={xMid} y2={y2}   stroke={stroke} strokeWidth={sw} />
+              <line x1={xMid} y1={yMid} x2={x2}   y2={yMid} stroke={stroke} strokeWidth={sw} />
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
 
 
 // ─── Round Column ─────────────────────────────────────────────────────────────
-function RoundColumn({ roundObj, isLast }) {
+function RoundColumn({ roundObj, rIdx, isLast, setCardRef }) {
   return (
     <div style={{ display: 'flex', flexShrink: 0, alignItems: 'stretch' }}>
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 240, flexShrink: 0 }}>
@@ -357,49 +494,22 @@ function RoundColumn({ roundObj, isLast }) {
           flex: 1, padding: '0 12px', gap: 12,
         }}>
           {roundObj.matches.map((match, mIdx) => (
-            <BracketMatchCard key={match.id || `ph-${mIdx}`} match={match} />
+            <div key={match.id || `ph-${mIdx}`} ref={el => setCardRef(`${rIdx}_${mIdx}`, el)}>
+              <BracketMatchCard match={match} />
+            </div>
           ))}
         </div>
       </div>
 
-      {!isLast && <ConnectorColumn matchCount={roundObj.matches.length} />}
+      {!isLast && <ConnectorColumn />}
     </div>
   );
 }
 
 
-// ─── Connector Column ─────────────────────────────────────────────────────────
-function ConnectorColumn({ matchCount }) {
-  const pairs = [];
-  for (let i = 0; i < matchCount; i += 2) pairs.push(i);
-
-  return (
-    <div style={{
-      width: 28, flexShrink: 0,
-      display: 'flex', flexDirection: 'column',
-      justifyContent: 'space-around',
-      paddingBottom: 12, marginTop: 27,
-    }}>
-      {pairs.map(pairStart => (
-        <ConnectorPair key={pairStart} />
-      ))}
-    </div>
-  );
-}
-
-function ConnectorPair() {
-  return (
-    <div style={{ flex: 2, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <div style={{ flex: 1, position: 'relative' }}>
-        <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'var(--border)' }} />
-        <div style={{ position: 'absolute', top: '50%', right: 0, width: 1, height: '50%', background: 'var(--border)' }} />
-      </div>
-      <div style={{ flex: 1, position: 'relative' }}>
-        <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'var(--border)' }} />
-        <div style={{ position: 'absolute', bottom: '50%', right: 0, width: 1, height: '50%', background: 'var(--border)' }} />
-      </div>
-    </div>
-  );
+// ─── Connector Column (spacer only — lines drawn by SVG overlay) ──────────────
+function ConnectorColumn() {
+  return <div style={{ width: 36, flexShrink: 0 }} />;
 }
 
 
@@ -504,7 +614,7 @@ function BracketMatchCard({ match }) {
             )}
             {match.scheduledAt && (
               <span>
-                {new Date(match.scheduledAt).toLocaleString('id-ID', {
+                {new Date(match.scheduledAt).toLocaleString('en-GB', {
                   weekday: 'short', day: 'numeric', month: 'short',
                   hour: '2-digit', minute: '2-digit',
                 })}
