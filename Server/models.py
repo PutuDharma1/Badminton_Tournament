@@ -36,6 +36,7 @@ class Tournament(db.Model):
     match_duration_minutes = db.Column(db.Integer,    default=40)        # minutes
     break_start_time       = db.Column(db.String(5),  nullable=True)     # 'HH:MM' or None
     break_end_time         = db.Column(db.String(5),  nullable=True)     # 'HH:MM' or None
+    point_system           = db.Column(db.String(20), default='RALLY_21', nullable=False)  # CLASSIC, RALLY_21, RALLY_15
 
     categories = db.relationship('Category', backref='tournament', lazy=True, cascade='all, delete-orphan')
     matches = db.relationship('Match', backref='tournament', lazy=True, cascade='all, delete-orphan')
@@ -58,6 +59,7 @@ class Tournament(db.Model):
             'breakStartTime': self.break_start_time,
             'breakEndTime': self.break_end_time,
             'registrationDeadline': self.registration_deadline.isoformat() if self.registration_deadline else None,
+            'pointSystem': self.point_system,
             'categories': [c.to_dict() for c in self.categories],
             'matches': [m.to_dict() for m in self.matches]
         }
@@ -235,7 +237,12 @@ class Match(db.Model):
             "homePlaceholder": self.home_placeholder,
             "awayPlaceholder": self.away_placeholder,
             "refereeId": self.referee_id,
-            "category": {"name": self.category.name} if self.category else None,
+            "category": {
+                "name": self.category.name,
+                "gender": self.category.gender,
+                "categoryType": self.category.category_type,
+            } if self.category else None,
+            "pointSystem": self.tournament.point_system if self.tournament else 'RALLY_21',
             "court": {"name": self.court.name} if self.court else None,
             "homeTeam": {"id": self.home_team.id, "name": self.home_team.name} if self.home_team else None,
             "awayTeam": {"id": self.away_team.id, "name": self.away_team.name} if self.away_team else None,

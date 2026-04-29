@@ -21,7 +21,7 @@ from routes.standings import standings_blueprint
 from routes.tournament import tournament_blueprint
 from routes.court import court_blueprint
 from routes.referee_application import referee_app_blueprint
-
+                                                         
 # Create Flask app
 app = Flask(__name__)
 

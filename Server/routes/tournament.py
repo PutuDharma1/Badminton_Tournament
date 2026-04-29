@@ -1,8 +1,10 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import db
-from models import Tournament, Category, Match, Participant, Team
+from models import Tournament, Category, Match, Participant, Team, User
 from datetime import datetime, timedelta
 from routes.schedule import generate_round_robin_matches, generate_knockout_bracket, advance_knockout
+from routes.utils import check_tournament_owner
 
 tournament_blueprint = Blueprint('tournament', __name__, url_prefix='/api/tournaments')
 
@@ -48,21 +50,31 @@ def get_tournament(id):
         return jsonify({"error": str(e)}), 500
 
 @tournament_blueprint.route('/', methods=['POST'], strict_slashes=False)
+@jwt_required()
 def create_tournament():
     data = request.get_json()
-    
-    required_fields = ['name', 'location', 'startDate', 'endDate', 'createdById']
+
+    required_fields = ['name', 'location', 'startDate', 'endDate']
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
+        creator_id = int(get_jwt_identity())
+        creator = User.query.get(creator_id)
+        if not creator:
+            return jsonify({"error": "User not found"}), 404
+
+        ps = data.get('pointSystem', 'RALLY_21')
+        if ps not in ('CLASSIC', 'RALLY_21', 'RALLY_15'):
+            return jsonify({"error": "Invalid pointSystem. Must be CLASSIC, RALLY_21, or RALLY_15"}), 400
+
         new_tournament = Tournament(
             name=data['name'],
             location=data['location'],
             start_date=datetime.fromisoformat(data['startDate'].replace('Z', '+00:00')),
             end_date=datetime.fromisoformat(data['endDate'].replace('Z', '+00:00')),
             description=data.get('description', ''),
-            created_by_id=data['createdById'],
+            created_by_id=creator_id,
             # ── Schedule settings ──
             daily_start_time=data.get('dailyStartTime', '09:00'),
             daily_end_time=data.get('dailyEndTime', '18:00'),
@@ -70,6 +82,7 @@ def create_tournament():
             break_start_time=data.get('breakStartTime') or None,
             break_end_time=data.get('breakEndTime') or None,
             registration_deadline=datetime.fromisoformat(data['registrationDeadline'].replace('Z', '+00:00')) if data.get('registrationDeadline') else None,
+            point_system=ps,
         )
         
         db.session.add(new_tournament)
@@ -81,12 +94,16 @@ def create_tournament():
         return jsonify({"error": str(e)}), 500
 
 @tournament_blueprint.route('/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_tournament(id):
     data = request.get_json()
     try:
         tournament = Tournament.query.get(id)
         if not tournament:
             return jsonify({"error": "Tournament not found"}), 404
+        allowed, err = check_tournament_owner(tournament)
+        if not allowed:
+            return err
 
         if 'name' in data:        tournament.name = data['name']
         if 'location' in data:    tournament.location = data['location']
@@ -101,6 +118,13 @@ def update_tournament(id):
         if 'breakEndTime' in data:         tournament.break_end_time         = data['breakEndTime']   or None
         if 'registrationDeadline' in data:
             tournament.registration_deadline = datetime.fromisoformat(data['registrationDeadline'].replace('Z', '+00:00')) if data['registrationDeadline'] else None
+        if 'pointSystem' in data:
+            ps = data['pointSystem']
+            if ps not in ('CLASSIC', 'RALLY_21', 'RALLY_15'):
+                return jsonify({"error": "Invalid pointSystem. Must be CLASSIC, RALLY_21, or RALLY_15"}), 400
+            if tournament.status != 'DRAFT':
+                return jsonify({"error": "Cannot change point system after tournament has started"}), 400
+            tournament.point_system = ps
 
         db.session.commit()
         return jsonify(tournament.to_dict()), 200
@@ -109,6 +133,7 @@ def update_tournament(id):
         return jsonify({"error": str(e)}), 500
 
 @tournament_blueprint.route('/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_tournament(id):
     try:
         from models import Court, Team, TeamParticipant, Category, Match, MatchSet
@@ -116,6 +141,9 @@ def delete_tournament(id):
         tournament = Tournament.query.get(id)
         if not tournament:
             return jsonify({"error": "Tournament not found"}), 404
+        allowed, err = check_tournament_owner(tournament)
+        if not allowed:
+            return err
 
         # Delete in correct FK dependency order to avoid constraint violations
         # 1. MatchSet rows (child of Match)
@@ -154,6 +182,7 @@ def delete_tournament(id):
 
 
 @tournament_blueprint.route('/<int:id>/start', methods=['POST'])
+@jwt_required()
 def start_tournament(id):
     try:
         from models import Court, Team, TeamParticipant, Category
@@ -161,6 +190,9 @@ def start_tournament(id):
         tournament = Tournament.query.get(id)
         if not tournament:
             return jsonify({"error": "Tournament not found"}), 404
+        allowed, err = check_tournament_owner(tournament)
+        if not allowed:
+            return err
 
         if tournament.status == 'ONGOING':
             return jsonify({"error": "Tournament is already ongoing"}), 400
@@ -261,6 +293,7 @@ def start_tournament(id):
 
 
 @tournament_blueprint.route('/<int:id>/fix-teams', methods=['POST'])
+@jwt_required()
 def fix_teams(id):
     """
     Backfill Team + TeamParticipant rows for participants that don't have a team yet.
@@ -268,6 +301,13 @@ def fix_teams(id):
     """
     try:
         from models import Team, TeamParticipant
+
+        tournament = Tournament.query.get(id)
+        if not tournament:
+            return jsonify({"error": "Tournament not found"}), 404
+        allowed, err = check_tournament_owner(tournament)
+        if not allowed:
+            return err
 
         participants = Participant.query.filter_by(tournament_id=id).all()
         created = 0
@@ -525,6 +565,7 @@ def get_groups(id):
 # ──────────────────────────────────────────────────────────────────────────────
 
 @tournament_blueprint.route('/<int:id>/generate-knockout', methods=['POST'])
+@jwt_required()
 def generate_knockout(id):
     """
     Generate single-elimination bracket from top 2 per group.
@@ -534,6 +575,9 @@ def generate_knockout(id):
         tournament = Tournament.query.get(id)
         if not tournament:
             return jsonify({"error": "Tournament not found"}), 404
+        allowed, err = check_tournament_owner(tournament)
+        if not allowed:
+            return err
 
         if tournament.current_stage != 'GROUP':
             return jsonify({"error": f"Cannot generate knockout from stage '{tournament.current_stage}'"}), 400

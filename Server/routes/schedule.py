@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 from extensions import db
 from models import Match, Team, Court, Category, Tournament
 from datetime import datetime, timedelta, time as dtime
@@ -374,18 +375,25 @@ def pre_generate_knockout_matches(tournament_id, court_available_after_group, gr
 
         ko_round = 1
         current_size = bracket_size // 2  # matches in this round
+        # Each round must start no earlier than the previous round fully ends.
+        # This prevents SF/Final being assigned to idle courts at earlier times.
+        round_earliest_start = base_ko_start
 
         while current_size >= 1:
             label = round_labels.get(current_size * 2, f'R{current_size * 2}')
             if current_size == 1:
                 label = 'F'
 
+            round_end = round_earliest_start  # track latest finish time in this round
+
             for pos_idx in range(current_size):
                 bracket_pos = pos_idx + 1
 
                 best_court = min(court_available, key=court_available.get)
+                # Enforce floor: this round cannot start before the previous round ended
+                effective_time = max(court_available[best_court], round_earliest_start)
                 t_slot = resolve_slot(
-                    court_available[best_court], DAILY_START, DAILY_END, BREAK_START, BREAK_END
+                    effective_time, DAILY_START, DAILY_END, BREAK_START, BREAK_END
                 )
 
                 if ko_round == 1:
@@ -414,6 +422,10 @@ def pre_generate_knockout_matches(tournament_id, court_available_after_group, gr
                 )
                 all_ko_matches.append(m)
                 court_available[best_court] = t_slot + MATCH_DURATION
+                round_end = max(round_end, t_slot + MATCH_DURATION)
+
+            # Advance the floor: next round starts no earlier than this round ends
+            round_earliest_start = round_end
 
             current_size //= 2
             ko_round += 1
@@ -694,13 +706,15 @@ def _create_knockout_bracket_legacy(tournament_id, tournament, cat_teams, comput
 
 def advance_knockout(tournament_id, finished_match):
     """
-    After a KNOCKOUT match finishes, fill the next-round placeholder match
-    with the actual winners once both siblings in the pair have finished.
+    After a KNOCKOUT match finishes, fill the winner into the next-round slot
+    immediately — no need to wait for the sibling match to also finish.
 
     Bracket positions are paired: (1,2) → next pos 1, (3,4) → next pos 2, etc.
+    Odd positions fill the home slot; even positions fill the away slot.
 
     If pre-generated placeholder matches exist (new behavior), they are updated
-    in-place. Otherwise new Match rows are created (legacy fallback).
+    in-place immediately when one side finishes. The legacy fallback (create new
+    Match row) still requires both teams to be known.
     """
     if finished_match.stage != 'KNOCKOUT' or not finished_match.winner_team_id:
         return None
@@ -710,6 +724,8 @@ def advance_knockout(tournament_id, finished_match):
         return None
 
     sibling_pos = pos + 1 if pos % 2 == 1 else pos - 1
+    next_round = finished_match.round + 1
+    next_pos = (min(pos, sibling_pos) + 1) // 2  # 1&2→1, 3&4→2
 
     sibling = Match.query.filter_by(
         tournament_id=tournament_id,
@@ -719,20 +735,7 @@ def advance_knockout(tournament_id, finished_match):
         bracket_position=sibling_pos,
     ).first()
 
-    if not sibling or sibling.status != 'FINISHED' or not sibling.winner_team_id:
-        return None  # sibling hasn't finished yet
-
-    next_round = finished_match.round + 1
-    next_pos = (min(pos, sibling_pos) + 1) // 2  # 1&2→1, 3&4→2
-
-    if pos % 2 == 1:
-        home_id = finished_match.winner_team_id
-        away_id = sibling.winner_team_id
-    else:
-        home_id = sibling.winner_team_id
-        away_id = finished_match.winner_team_id
-
-    # Try to find a pre-generated placeholder for this slot
+    # Try to find a pre-generated placeholder for next round
     next_match = Match.query.filter_by(
         tournament_id=tournament_id,
         category_id=finished_match.category_id,
@@ -742,13 +745,36 @@ def advance_knockout(tournament_id, finished_match):
     ).first()
 
     if next_match:
-        # Update the existing placeholder with real team IDs
-        next_match.home_team_id = home_id
-        next_match.away_team_id = away_id
-        next_match.home_placeholder = None
-        next_match.away_placeholder = None
+        # Immediately fill this match's slot — no need to wait for sibling
+        if pos % 2 == 1:
+            next_match.home_team_id = finished_match.winner_team_id
+            next_match.home_placeholder = None
+        else:
+            next_match.away_team_id = finished_match.winner_team_id
+            next_match.away_placeholder = None
+
+        # If sibling also finished, fill the other slot too
+        if sibling and sibling.status == 'FINISHED' and sibling.winner_team_id:
+            if sibling_pos % 2 == 1:
+                next_match.home_team_id = sibling.winner_team_id
+                next_match.home_placeholder = None
+            else:
+                next_match.away_team_id = sibling.winner_team_id
+                next_match.away_placeholder = None
+
         db.session.commit()
         return next_match
+
+    # ── Legacy fallback: create a new Match row — needs both teams known ─────
+    if not sibling or sibling.status != 'FINISHED' or not sibling.winner_team_id:
+        return None  # can't create a new match row with only one team
+
+    if pos % 2 == 1:
+        home_id = finished_match.winner_team_id
+        away_id = sibling.winner_team_id
+    else:
+        home_id = sibling.winner_team_id
+        away_id = finished_match.winner_team_id
 
     # ── Legacy fallback: create a new Match row ───────────────────────────────
     tournament = Tournament.query.get(tournament_id)
@@ -800,7 +826,9 @@ def advance_knockout(tournament_id, finished_match):
 # ──────────────────────────────────────────────────────────────────────────────
 
 @schedule_blueprint.route('/generate', methods=['POST'])
+@jwt_required()
 def generate_schedule():
+    from routes.utils import check_tournament_owner
     data = request.get_json()
     tournament_id = data.get('tournamentId')
     category_id   = data.get('categoryId')
@@ -809,8 +837,20 @@ def generate_schedule():
         return jsonify({"error": "tournamentId required"}), 400
 
     try:
+        tournament = Tournament.query.get(tournament_id)
+        if not tournament:
+            return jsonify({"error": "Tournament not found"}), 404
+        allowed, err = check_tournament_owner(tournament)
+        if not allowed:
+            return err
+
+        if tournament.status != 'DRAFT':
+            return jsonify({
+                "error": f"Cannot generate schedule for a tournament with status '{tournament.status}'. Schedule generation is only allowed when the tournament is in DRAFT status."
+            }), 400
+
         matches = generate_round_robin_matches(tournament_id, category_id)
-        t = Tournament.query.get(tournament_id)
+        t = tournament
         return jsonify({
             "message": f"Generated {len(matches)} matches.",
             "matchCount": len(matches),

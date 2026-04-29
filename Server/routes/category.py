@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 from extensions import db
 from models import Category, Team, Participant, Tournament
+from routes.utils import check_tournament_owner
 
 category_blueprint = Blueprint('category', __name__, url_prefix='/api/categories')
 
@@ -27,6 +29,7 @@ def get_age_groups():
     return jsonify(AGE_GROUPS), 200
 
 @category_blueprint.route('/', methods=['POST'])
+@jwt_required()
 def create_category():
     data = request.get_json()
     required = ['name', 'gender', 'level', 'tournamentId']
@@ -38,6 +41,9 @@ def create_category():
         tournament = Tournament.query.get(data['tournamentId'])
         if not tournament:
             return jsonify({"error": "Tournament not found"}), 404
+        allowed, err = check_tournament_owner(tournament)
+        if not allowed:
+            return err
 
         # If ageGroup is provided, auto-fill min_age / max_age from rules
         age_group = data.get('ageGroup')
@@ -69,11 +75,17 @@ def create_category():
         return jsonify({"error": str(e)}), 500
 
 @category_blueprint.route('/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_category(id):
     try:
         category = Category.query.get(id)
         if not category:
             return jsonify({"error": "Category not found"}), 404
+        tournament = Tournament.query.get(category.tournament_id)
+        if tournament:
+            allowed, err = check_tournament_owner(tournament)
+            if not allowed:
+                return err
 
         # Check if participants or matches are tied to this category
         has_participants = Participant.query.filter_by(category_id=id).first()
